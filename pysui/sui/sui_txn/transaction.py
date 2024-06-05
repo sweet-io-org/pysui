@@ -439,6 +439,20 @@ class _SuiTransactionBase:
         digest = bcs.Digest.from_bytes(compiled_package.package_digest)
         return modules, dependencies, digest
 
+    def _from_bytecode(
+        self,
+        modules: list[str],
+        dependencies: list[str],
+    ) -> tuple[list[str], list[str], bcs.Digest]:
+        """."""
+        modules = list(map(self._to_bytes_from_str, modules))
+        dependencies = [
+            bcs.Address.from_str(x if isinstance(x, str) else x.value)
+            for x in dependencies
+        ]
+        return modules, dependencies
+
+
     def _receiving_parm(self, parm) -> bool:
         """."""
         arg_is_receiving = False

@@ -590,6 +590,22 @@ class SuiTransaction(_SuiTransactionBase):
         modules, dependencies, _digest = self._compile_source(project_path, args_list)
         return self.builder.publish(modules, dependencies)
 
+    def publish_from_bytecode(
+        self, *, modules: list[str], dependencies: list[str]
+    ) -> bcs.Argument:
+        """publish Creates a publish command.
+
+        :param project_path: path to project folder
+        :type project_path: str
+        :param args_list: Additional `sui move build` arguments, defaults to None
+        :type args_list: Optional[list[str]], optional
+        :return: A command result (UpgradeCap) that should used in a subsequent transfer commands
+        :rtype: bcs.Argument
+        """
+        modules, dependencies = self._from_bytecode(modules, dependencies)
+        return self.builder.publish(modules, dependencies)
+
+
     def publish_upgrade(
         self,
         *,
