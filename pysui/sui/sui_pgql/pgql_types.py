@@ -1279,7 +1279,7 @@ class MoveFunctionGQL:
 
     @classmethod
     def from_query(clz, in_data: dict) -> "MoveFunctionGQL":
-        if in_data.get("object"):
+        if in_data.get("object") or in_data.get("function_name"):
             fdict: dict = {}
             _fast_flat(in_data, fdict)
             return MoveFunctionGQL.from_dict(fdict)
@@ -1347,8 +1347,8 @@ class MoveModuleGQL:
     """Sui MoveModule representation."""
 
     module_name: str
-    module_structures: Optional[MoveStructuresGQL]
-    module_functions: Optional[MoveFunctionsGQL]
+    module_structures: Union[MoveStructuresGQL, list]
+    module_functions: Union[MoveFunctionsGQL, list]
 
     @classmethod
     def from_query(clz, in_data: dict) -> "MoveModuleGQL":
@@ -1360,7 +1360,6 @@ class MoveModuleGQL:
                 fdict["module_structures"] = []
             if "function_list" in fdict:
                 fdict["module_functions"] = []
-            # fdict["module_structures"] = fdict.get("module_structures", [])
             fdict["module_structures"] = MoveStructuresGQL.from_query(
                 {"nodes": fdict["module_structures"]}
             )
