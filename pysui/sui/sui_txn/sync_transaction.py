@@ -14,7 +14,7 @@
 
 """Sui synchronous Transaction for building Programmable Transactions."""
 
-from typing import Any, Optional, Union, Callable
+from typing import Any, Optional, Union, Callable, List
 import logging
 import base64
 from deprecated.sphinx import versionadded, versionchanged, deprecated
@@ -327,6 +327,7 @@ class SuiTransaction(_SuiTransactionBase):
         options: Optional[dict] = None,
         use_gas_object: Optional[Union[str, ObjectID]] = None,
         run_verification: Optional[bool] = False,
+        additional_signers: Optional[List[SuiAddress]] = None,
     ) -> Union[SuiRpcResult, ValueError]:
         """execute Finalizes transaction and submits for execution on the chain.
 
@@ -354,11 +355,12 @@ class SuiTransaction(_SuiTransactionBase):
                 return SuiRpcResult(False, "Failed validation", failed_verification)
 
         tx_b64 = base64.b64encode(ser_data).decode()
-
         exec_tx = ExecuteTransaction(
             tx_bytes=tx_b64,
             signatures=self.signer_block.get_signatures(
-                client=self.client, tx_bytes=tx_b64
+                client=self.client,
+                tx_bytes=tx_b64,
+                additional_signers=additional_signers,
             ),
             options=options,
             request_type=SuiRequestType.WAITFORLOCALEXECUTION,

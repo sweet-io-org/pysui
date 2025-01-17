@@ -14,7 +14,7 @@
 
 """Transaction MultiSig Signing."""
 
-from typing import Optional, Union
+from typing import Optional, Union, List
 from deprecated.sphinx import versionadded, versionchanged
 
 from pysui import SuiAddress, SyncClient, handle_result, ObjectID, AsyncClient
@@ -135,11 +135,16 @@ class _SignerBlockBase:
 
     @versionchanged(version="0.21.2", reason="Fix regression on MultiSig signing.")
     def get_signatures(
-        self, *, client: SyncClient, tx_bytes: str
+            self, *, client: SyncClient, tx_bytes: str, additional_signers: Optional[List[SuiAddress]] = None,
     ) -> SuiArray[SuiSignature]:
         """Get all the signatures needed for the transaction."""
         sig_list: list[SuiSignature] = []
-        for signer in self._get_potential_signatures():
+        signers = self._get_potential_signatures()
+        if additional_signers:
+            for new_signer in additional_signers:
+                if new_signer not in signers:
+                    signers.append(new_signer)
+        for signer in signers:
             if isinstance(signer, SuiAddress):
                 sig_list.append(
                     client.config.keypair_for_address(signer).new_sign_secure(tx_bytes)
