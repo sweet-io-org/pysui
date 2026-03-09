@@ -1,13 +1,5 @@
 #    Copyright Frank V. Castellucci
-#    Licensed under the Apache License, Version 2.0 (the "License");
-#    you may not use this file except in compliance with the License.
-#    You may obtain a copy of the License at
-#        http://www.apache.org/licenses/LICENSE-2.0
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS,
-#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#    See the License for the specific language governing permissions and
-#    limitations under the License.
+#    SPDX-License-Identifier: Apache-2.0
 
 # -*- coding: utf-8 -*-
 
@@ -15,12 +7,15 @@
 
 from abc import abstractmethod
 from typing import Any, Generic, TypeVar, Union
-from deprecated.sphinx import versionchanged
+from deprecated.sphinx import versionchanged, deprecated
 from pysui.abstracts import SuiBaseType
 from pysui.sui.sui_types.scalars import ObjectID, SuiInteger, SuiString
 from pysui.sui.sui_types.address import SuiAddress
 
 
+@deprecated(
+    version="0.65.0", reason="Transition to pysui GraphQL SuiClients and QueryNodes"
+)
 class SuiCollection(SuiBaseType):
     """Generic Collection Type."""
 
@@ -28,6 +23,9 @@ class SuiCollection(SuiBaseType):
 AT = TypeVar("AT", SuiAddress, ObjectID, SuiInteger, SuiString)
 
 
+@deprecated(
+    version="0.65.0", reason="Transition to pysui GraphQL SuiClients and QueryNodes"
+)
 class SuiArray(SuiCollection, Generic[AT]):
     """Array type."""
 
@@ -121,7 +119,15 @@ class SuiArray(SuiCollection, Generic[AT]):
         """Alias for transactions."""
         return self.array
 
+    @property
+    def past_objects(self) -> list[dict]:
+        """Alias for transactions."""
+        return self.array
 
+
+@deprecated(
+    version="0.65.0", reason="Transition to pysui GraphQL SuiClients and QueryNodes"
+)
 class SuiMap(SuiCollection):
     """Dictionary Type."""
 
@@ -171,6 +177,9 @@ class SuiMap(SuiCollection):
         return self.map
 
 
+@deprecated(
+    version="0.65.0", reason="Transition to pysui GraphQL SuiClients and QueryNodes"
+)
 class BatchParameter(SuiMap):
     """BatchParameter is abstraction for TransferObjectParams and MoveCallRequestParams."""
 
@@ -181,6 +190,9 @@ class BatchParameter(SuiMap):
 
 @versionchanged(
     version="0.30.0", reason="event_seq and tx_seq changed from int to string"
+)
+@deprecated(
+    version="0.65.0", reason="Transition to pysui GraphQL SuiClients and QueryNodes"
 )
 class EventID(SuiMap):
     """Event ID specifier."""

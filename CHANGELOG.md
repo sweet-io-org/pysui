@@ -5,7 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.63.0] - Unpublished
+## [0.96.0] - 2026-03-04
+
+### Added
+
+- GraphQL: `maxMultiGetSize` to serviceConfig (via `client.rpc_config().serviceConfig`)
+- GraphQL: Added support for new Sui Move package scheme for publishing
+- gRPC:  Added support for new Sui Move package scheme for publishing
+
+### Fixed
+
+- GraphQL: Removed 'error' field from immediate Simulate and Execute results.
+
+### Changed
+
+### Removed
+
+## [0.95.0] - 2026-01-15
 
 ### Added
 
@@ -13,7 +29,679 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- gRPC: Updated Mysten gRPC protobuffs
+- GraphQL: Enabled `skip_checks` and `do_gas_selection` on `DryRunTransaction`
+- GraphQL: Enabled `skip_checks` and `do_gas_selection` on `DryRunTransactionKind`
+
 ### Removed
+
+## [0.94.0] - 2025-12-11
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/362) Support gRPC archive transactions
+- [enhancement](https://github.com/FrankC01/pysui/issues/372) GraphQL query: GetObjectsForType
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/371) pysui `wallet` not creating transaction from client
+- typo's in `splay` utility help documentation
+
+### Changed
+
+- Updated Mysten gRPC protobuffs
+- GraphQL: Mysten removed events and timestamp from transaction simulation results, defaults to None in `DryRunResultTransactionGQL`
+
+### Removed
+
+## [0.93.0] - 2025-11-11
+
+**Breaking Changes**
+GraphQL and gRPC: Transactions are built from client being used. SuiTransaction, and variants,
+will now fail if constructed directly.
+
+GraphQL: For DryRunTransactionKind, argument name changed from `tx_bytestr` to `tx_kind`
+
+### Added
+
+- GraphQL: `atRisk` and `exchangeRateTableAddress` to Validator
+- GraphQL: `GetValidatorExchangeRates`. Given a validator's exchange object, return rate information by Epoch
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/368) SerialTransactionExecutor was not fetchinig current gas price
+
+### Changed
+
+- [change](https://github.com/FrankC01/pysui/issues/367) dropped `v2beta` protos
+- [change](https://github.com/FrankC01/pysui/issues/369) Updated `smash` and `splay` utilities to GraphQL Beta
+- [change](https://github.com/FrankC01/pysui/issues/366) Added exception in standalone transaction construction.
+  Must use appropriate client (GraphQL or gRPC) `transaction(...)` method. Exception thrown otherwise.
+- GraphQL: Rename `tx_bytestr` to `tx_kind` in DryRunTransactionKind
+- Updated v2 protobuffs from Mysten for gRPC
+
+### Removed
+
+- gRPC: GetValidatorApy removed, apy field not longer available
+
+## [0.92.0] - 2025-10-16
+
+**ANNOUNCE: In this release JSON RPC support is EOL. Strongly advised to move to pysui gRPC or GraphQL.**
+
+- You will need to update the GraphQL URLs in PysuiConfig.json at a minimum. See [pysui-graphql](https://github.com/FrankC01/pysui/blob/main/PYSUI_GRAPHQL.md)
+
+### Added
+
+- `v2` gRPC protos included, `v2beta` to be sunset
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/363) gRPC: 'finality' dropped from field_mask (read_mask)
+- [bug](https://github.com/FrankC01/pysui/issues/361) JSON RPC: [PR](https://github.com/FrankC01/pysui/pull/355) broke
+  connectivity.
+- GraphQL Mysten fixed issue with fetching 0x2::sui::SUI by address in testnet
+
+### Changed
+
+- gRPC LiveDataService renamed to StateService for `v2` protos
+- gRPC SimulateTransaction moved to TransactionService for `v2` protos
+- DryRunTransactionKind tx_meta requires 'sender' set. This is due to a constraint in Sui GraphQL.
+
+### Removed
+
+## [0.91.0] - 2025-10-02
+
+**Breaking Changes**
+The transition from GraphQL ALPHA to GraphQL BETA introduced a number of input and output changes.
+
+- You will need to update the GraphQL URLs in PysuiConfig.json at a minimum. See [pysui-graphql](https://github.com/FrankC01/pysui/blob/main/PYSUI_GRAPHQL.md)
+- Be sure to test thoroughly and report any issues on `pysui` github or our discord channel found in README.md.
+
+### Added
+
+- Support for Mysten GraphQL Beta
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/351) GraphQL change to httpx kwargs, was failing on Async 'proxies'
+
+### Changed
+
+### Removed
+
+## [0.90.1] - 2025-09-22
+
+Bumped dependentices version, if cloning or branching from repo recommended to re-run `pip install -r requirements.txt`
+
+### Added
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/351) GraphQL change to httpx kwargs, was failing on Async 'proxies'
+
+### Changed
+
+### Removed
+
+## [0.90.0] - 2025-09-13
+
+Bumped dependentices version, if cloning or branching from repo recommended to re-run `pip install -r requirements.txt`
+
+### Added
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/341) JSON RPC: Client get_gas_from_faucet not handling exception
+- [bug](https://github.com/FrankC01/pysui/pull/345) Typo in global constants
+- [bug](https://github.com/FrankC01/pysui/pull/343) Fix alias length validation logic in JSON RPC configuration operation
+
+### Changed
+
+- [change](https://github.com/FrankC01/pysui/pull/347) Bumped gql, httpx, h2, websockets, pysui-fastcrypto
+- [change](https://github.com/FrankC01/pysui/pull/348) JSON RPC address print
+
+### Removed
+
+## [0.89.0] - 2025-09-01
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/337) Added optional `timeout:float` argument to
+GraohQL client constructor and execute methods.
+- [enhancement](https://github.com/FrankC01/pysui/issues/340) Include Mysten gRPC archive nodes to `PysuiConfiguration.initialize_config`
+
+### Fixed
+
+- Typo in wallet `execute-signed-tx` text
+- Remove extra files from distribution build
+- GraphQL: DynamicField results not getting processed
+- [bug](https://github.com/FrankC01/pysui/issues/335) pysui PTB gRPC transaction `publish_upgrade` fix
+
+### Changed
+
+- Set `grpc_a_example.py` to default to devnet node
+- Bumped betterproto2 to 0.8.0
+
+### Removed
+
+## [0.88.0] - 2025-08-03
+
+### Added
+
+- gRPC: VerifySignature request
+- [change](https://github.com/FrankC01/pysui/issues/333) gRPC: `txn_expires_after: Optional[int] = None` to SimulateTransactionLKind request
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/334) Fix optional scalar issue.
+
+### Changed
+
+- Documentation
+- [change](https://github.com/FrankC01/pysui/issues/327) `SuiGrpcClient` added `default_headers`
+argument to constructor which will be included in every request unless they are overriddent
+by the `metadata` kwarg on `async client.execute`
+
+### Removed
+
+## [0.87.0] - 2025-08-03
+
+### Added
+
+- [gRPC beta support](https://github.com/FrankC01/pysui/issues/284)
+- JSON RPC, GraphQL and gRPC clients have method: `transaction(...)` which returns a SuiTransaction
+leveraging the client protocol.
+- Added [doc](https://github.com/FrankC01/pysui/issues/303)
+
+### Fixed
+
+- Updated legacy faucet url for JSON RPC
+- [bug](https://github.com/FrankC01/pysui/issues/321) Fix to `transfer_sui` TransactionBuilder
+
+### Changed
+
+- [change](https://github.com/FrankC01/pysui/issues/322) Add `type` to PysuiConfiguration groups
+- [change](https://github.com/FrankC01/pysui/issues/328) Add `__name__` to module loggers
+
+### Removed
+
+## [0.86.0] - 2025-06-18
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/312) add 'save' and 'save_to' for PysuiConfiguration
+
+### Fixed
+
+- readthedocs build failing
+
+### Changed
+
+- [BREAKING change](https://github.com/FrankC01/pysui/issues/313) The constructor of PysuiConfiguration no
+longer creates the PysuiConfig.json file if it does not exist. First time users must call class method `PysuiConfiguration.initialize_config`.
+See [documentation](https://pysui.readthedocs.io/en/latest/pyconfig.html#first-time-instantiation).
+
+## [0.85.0] - 2025-06-02
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/304) Ability to return a Python dataclass from a BCS object
+- [enhancement](https://github.com/FrankC01/pysui/issues/309) Generate transaction digest before execution
+- [Feature Request](https://github.com/FrankC01/pysui/issues/311) Support proxy in JSON RPC and GraphQL client constructors
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/308) Processing type_args containing spaces fails
+
+### Changed
+
+- [gRPC](https://github.com/MystenLabs/sui/pull/22204)
+
+## [0.84.0] - 2025-05-19
+
+### Added
+
+- `-i. --include-pruned` flag on wallet gas and object commands to include pruned or deleted objects in results.
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/306) `mtobcs` Duplicates are being generated.
+
+### Changed
+
+- [change](https://github.com/FrankC01/pysui/issues/302) `wallet split-coin` now finds best fit gas coin to split from when omitting `-c/--coin_object_id` argument
+- [enhancment](https://github.com/FrankC01/pysui/issues/297) Add paging to GetMultipleGasObjects
+- `async_gas` utility only reports on active gas coins
+- [enhancement](https://github.com/FrankC01/pysui/issues/298) Initial refactoring collection of cursored GraphQL functions, gas coin and object queries to `pgql_utils.py`
+- [change](https://github.com/FrankC01/pysui/issues/301) devnet and testnet Sui faucet request changes.
+
+### Removed
+
+- Deprecated `GetMultiplePastObjects`, use `GetMultipleVersionedObjects` instead
+
+## [0.83.0] - 2025-04-27
+
+### Added
+
+- Initial gRPC documentation (WIP)
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/295) `mtobcs` async loop not started from cmdline
+- Wallet gas display to identify pruned vs active coins
+- GraphQL transaction gas resolution to not include pruned coins
+- gRPC execute transaction - Convert base64 tx_bytestr and signatures to BCS.value bytes
+
+### Changed
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/294) Use of mtobcs programmatically
+- [enhancement](https://github.com/FrankC01/pysui/issues/284) Switch gRPC library from `betterproto` to `betterproto2`
+
+### Removed
+
+## [0.82.0] - 2025-04-21
+
+### Added
+
+- [BETA] gRPC support
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/292) GraphQL - build and sign specifying gas to use broken.
+- [bug](https://github.com/FrankC01/pysui/issues/291) Updated `mtobcs` to support generic structs.
+
+### Changed
+
+### Removed
+
+## [0.81.0] - 2025-03-24
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/285) **BETA** Utility to create python BCS classes from Move structs and enums
+
+### Fixed
+
+### Changed
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/276) CLI utilities now accept `--config` argument
+to use PysuiConfiguration from other than default path.
+
+### Removed
+
+## [0.80.0] - 2025-02-24
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/280) **BETA** Utility to create python BCS classes from JSON
+- [enhancement](https://github.com/FrankC01/pysui/issues/282) **BETA** Utility to create JSON from python BCS classes
+
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.79.0] - 2025-02-24
+
+### Added
+
+- For GraphQL added `bcs` to the DryRunResult fields
+
+### Fixed
+
+- [bug PR](https://github.com/FrankC01/pysui/pull/278) Fixes new ConsensusCommitPrologueV3 handling bug in JSON RPC dataclass. Contriubed by [Omri Levy](https://github.com/omri2861)
+- [bug PR](https://github.com/FrankC01/pysui/pull/281) Added `past_objects` property to SuiArray for JSON RPC supporting `sui_tryGetPastObjects`
+
+### Changed
+
+### Removed
+
+## [0.78.0] - 2025-02-11
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/270) CLI apps now take `--group` as argument.
+  - Note that pysui CLI apps are all GraphQL based, setting group to JSON RPC type will fail execution.
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/271) Use public key to verify signature on personal message.
+  - Added `serialize` to SuiPublicKey to convert to signature scheme and bytes to base64
+  - Added `from_serialized` to SuiPublicKey as class method to create SuiPublicKey from base64 encoded signature scheme and bytes
+  - Added `verify_personal_message` to SuiPublicKey to verify signature using public key
+
+### Fixed
+
+### Changed
+
+- Bumpted to pysui-fastcrypto 0.6.0 to support public key signature verification
+
+### Removed
+
+- `sign_message` on SuiKeyPair deprecated since "0.71.0"
+
+## [0.77.0] - 2025-02-02
+
+### Added
+
+- `object_changes()` to `TransactionResultGQL` returns data structure of changes.
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/266) Fixes exception, return error if budget greater than balance
+- Typos in readthedocs for GraphQL Programmable Transactions
+
+### Changed
+
+### Removed
+
+## [0.76.1] - 2025-01-19
+
+### Added
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/pull/263) Add missing `await` in AsyncSuiTransaction
+- [bug](https://github.com/FrankC01/pysui/pull/265) Correct parsed_json type for JSON RPC Event data object
+
+### Changed
+
+### Removed
+
+## [0.76.0] - 2025-01-15
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/257) Keypair to bech32 format
+- [enhancement](https://github.com/FrankC01/pysui/issues/256) smash utility to merge all Sui coins for address
+- [enhancement](https://github.com/FrankC01/pysui/issues/255) splay utility to distribute coins to 1 or more addresses
+- [change](https://github.com/FrankC01/pysui/issues/262) `GetMultipleVersionedObjects` to support Sui GraphQL 1.4x.x multiGetObjects
+- [change](https://github.com/FrankC01/pysui/issues/259) `ServiceConfigGQL` added additional constraints
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/258) Fix GetDelegatedStakes GraphQL query
+- [bug](https://github.com/FrankC01/pysui/issues/261) Fix OptionalU64 decode in transfer_sui
+
+### Changed
+
+- Bumped pysui-fastcrypto dependency
+- Removed dead code and legacy dependencies in `async-gas`
+- [change](https://github.com/FrankC01/pysui/issues/262) Deprecated `GetMultiplePastObjects` as Sui GraphQL 1.40.0 deprecated underlyting query and introduced multiGetObjects.
+
+### Removed
+
+## [0.75.0] - 2025-01-03
+
+**BREAKING CHANGES to SerialTransactionExecution constructor**
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/248) - SerialTransactionExecutor object resolution caching
+- [enhancement](https://github.com/FrankC01/pysui/issues/250) - Sender and Sponsor support in SerialTransactionExecutor
+- [enhancement](https://github.com/FrankC01/pysui/issues/254) - added wait_for_transaction on GraphQL clients
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/249) GraphQL Option scalar encoding
+
+### Changed
+
+- [change](https://github.com/FrankC01/pysui/issues/253) SerialTransactionExecution keywords on init changes
+- [change](https://github.com/FrankC01/pysui/issues/252) SerialTransactionExectuor use int balance in _smash_gas sort
+- Bumped pysui-fastcrypto to 0.5.1
+
+### Removed
+
+## [0.74.0] - 2024-12-24
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/243) SerialTransactionExecutor implemented
+  Here are the initial [docs](https://pysui.readthedocs.io/en/latest/graphql_serial_exc.html)
+
+### Fixed
+
+### Changed
+
+- [change](https://github.com/FrankC01/pysui/issues/246) `optional_object` handles 'None'
+
+### Removed
+
+## [0.73.0] - 2024-12-09
+
+### Added
+
+- `wait_for_transaction` added to AsyncSuiGQLClient
+- [enhancement](https://github.com/FrankC01/pysui/issues/245) GraphQL: Added `optional_object` to SuiTransactions
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/244) Adding `epoch` property to SuiString for JSON RPC.
+  - However; Sui ignores this parameter in the implementation. Adding only for Insepct argument compatability
+- [bug](https://github.com/FrankC01/pysui/issues/242) GraphQL: Fixed bug in publish_upgrade
+
+### Changed
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/241) Validator paging
+
+### Removed
+
+## [0.72.0] - 2024-11-13
+
+### Added
+
+- GraphQL: Transaction execution adds BCS in result (Base64 encoded bcs serialization of the on-chain transaction effects.)
+- GraphQL: bcs_txne.py BCS Definition for V1 and V2 TransactionEffects
+
+### Fixed
+
+### Changed
+
+- [change](https://github.com/FrankC01/pysui/issues/239)
+  - JSON RPC: Sync and Async transactions accept Argument as recipient in `transfer_objects`
+  - GraphQL: Sync and Async transactions accept Argument as recipient in `transfer_objects`
+
+### Removed
+
+## [0.71.0] - 2024-10-30
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/235)
+  - Signing personal message with intent added to SuiKeyPair as `sign_personal_message`
+  - Verifying personal message with signature added to SuiKeyPair as `verify_personal_message`
+
+### Fixed
+
+- EventGQL type `sender` declaration
+- [bug](https://github.com/FrankC01/pysui/issues/231) to fixup after including this release:
+  - Delete the previous configuration `rm -rf ~/.pysui` or where you may have initially located it
+  - Restart the app/script that was previously failing
+- [bug](https://github.com/FrankC01/pysui/issues/237) GraphQL argument validator was not handling bool
+
+### Changed
+
+- GetEvents inline docs
+- GraphQL schema removed event type from event enumeration in StandardEvent fragment
+- Deprecated `sign_message` on sui_crypto SuiKeyPair
+- Deprecated `verify_message` on sui_crypto SuiKeyPair
+
+### Removed
+
+## [0.70.0] - 2024-10-08
+
+### Added
+
+- [enhancement](https://github.com/FrankC01/pysui/issues/230) Asynch PTB
+- `gen_doc_qnode` added to refresh QueryNode documentation (link table)
+- `sgqls` script to persist Sui GraphQL schemas. See `sgqls -h` or `python samples/sgqls.py -h`
+
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.69.0] - 2024-09-22
+
+### Added
+
+### Fixed
+
+### Changed
+
+- Bump version 0.69.0
+- GraphQL Schema updates for fields in `serviceConfig`
+- Validate with 1.35.0 JSON RPC Schema
+- Validate with 1.34.0 GraphQL Schema
+
+### Removed
+
+## [0.68.0] - 2024-09-14
+
+**BREAKING CHANGES to GraphQL multi-schema support and Mysten URL availability**
+**BREAKING CHANGES Removed pysui legacy sample apps: wallet, async-gas, async-sub, async-sub-txn**
+**BREAKING CHANGES Renamed pysui GraphQL sample apps: walletg to wallet, async-gasg to async-gas**
+
+### Added
+
+- Docs for native types used in transaction builder arguments
+
+### Fixed
+
+- GraphQL DryRun gas price expects int (Uint53)
+
+### Changed
+
+- Bump version 0.68.0
+- On PysuiConfiguration, renamed `active_env` property to `active_profile`
+- Mysten GraphQL removed `devnet-beta` url and only supports:
+  - <https://sui-mainnet.mystenlabs.com/graphql>
+  - <https://sui-testnet.mystenlabs.com/graphql>
+  - <https://sui-devnet.mystenlabs.com/graphql>
+
+### Removed
+
+- Support for Sui GraphQL multi-schema removed from providers and Sui GraphQL clients.
+
+## [0.67.0] - 2024-08-21
+
+### Added
+
+- signatures on transactions to:
+  - QueryNodes: GetMultipleTx and GetFilteredTx
+  - Fragments: StandardTransaction
+  - Result Types: TransactionResultGQL and TransactionSummaryGQL
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/226) Encoding of bytes argument (GraphQL)
+- [bug](https://github.com/FrankC01/pysui/issues/224) When previous txn digest not present (GraphQL)
+- Handling exception for unsupported schema version query at initiatlization of client (GraphQL)
+
+### Changed
+
+- Bump version 0.67.0
+
+### Removed
+
+- `sui_move` package. Obsoleted move binarie readers/parsers
+
+## [0.66.0] - 2024-08-04
+
+### Added
+
+- On PysuiConfiguration:
+  - `new_group` - creates a new PysuiConfiguration group
+  - `add_keys` adds a collection of keys and optional aliases to a group
+  - `new_profile` creates equivalant of Sui CLI new-env
+  - `update_profile` updates profile values
+
+### Fixed
+
+- Coin deserialization failed when previousTransactionBlock has been pruned
+- Validate GraphQL schema existence before adding to available list
+- [bug](https://github.com/FrankC01/pysui/issues/222) Fixed publish that broke with enums
+
+### Changed
+
+- Set version 0.66.0
+- Update PysuiConfiguration docs
+- Reorganized initiatlization of PysuiConfiguration and run time rebuilding from `client.yaml`
+
+### Removed
+
+## [0.65.0] - 2024-07-18
+
+**BREAKING CHANGES to GraphQL support**
+
+### Added
+
+- [PysuiConfiguration](https://pysui.readthedocs.io/en/latest/graphql_pyconfig.html)
+
+### Fixed
+
+### Changed
+
+- *BREAKING* SuiConfig is no longer used to instantiate a GraphQL client, instead
+  use PysuiConfiguration
+- Updated GraphQL client to use PysuiConfiguration
+- Updated GraphQL transaction builder to use PysuiConfiguration
+- Updated GraphQL samples to use PysuiConfiguration
+- Updated `walletg` and `async_gasg` to use PysuiConfiguration
+- PysuiConfiguration, SyncGqlClient and AsyncGqlClient as aliases in `pysui.__init__`
+- [change](https://github.com/FrankC01/pysui/issues/218) GraphQL remove SuiTransaction legacy dependency
+- Deprecated Event and Transaction subscriptions and subscription Client
+- Deprecate all Builders
+
+### Removed
+
+## [0.64.0] - 2024-06-28
+
+**BREAKING CHANGES**
+
+### Added
+
+- GraphQL default and override schema usage (*testnet and mainnet only, devnet does not support*)
+  - Sui introduced support for multiple concurrent GraphQL schemas
+  - pysui suports setting the default schema at client init
+  - pysui supports overriding the default schema at execution requests
+  - pysui QueryNodes can define schema specific versions
+
+### Fixed
+
+- [bug](https://github.com/FrankC01/pysui/issues/216) walletg gas command
+
+### Changed
+
+- [BREAKING](https://github.com/FrankC01/pysui/issues/216) pysui GraphQL clients replaced properties with functions taking optional versions
+- [BREAKING](https://github.com/FrankC01/pysui/issues/215) GraphQL SuiTransaction `txer.build_and_sign()` returns a dict now
+- Updated `pgql_s_example.py`
+- Updated `pgql_s_ptb.py`
+- Updated `pgql_a_example.py`
+
+### Removed
+
+## [0.63.0] - 2024-06-18
+
+### Added
+
+- Serialization of **pysui GraphQL SuiTransaction** to **Sui Wallet JSON standard** (_schema version 2_)
+  - `pgql_wallet_ser.serialize_to_wallet_standard`
+- Deserialization of **Sui Wallet JSON standard** (_schema version 2_) to dataclasses
+  - `pgql_wallet_deser.deserialize_from_wallet_standard`
+- Deserialization of **Sui Wallet JSON standard** (_schema version 2_) to **pysui GraphQL SuiTransaction**
+  - `pgql_wallet2txn_deser.deserialize_to_transaction`
+
+### Fixed
+
+- [PR](https://github.com/FrankC01/pysui/pull/213) Fix typos
+
+### Changed
+
+### Removed
+
+- GetLoadedChildObjects as Sui 1.28.0 removed RPC "sui_getLoadedChildObjects"
 
 ## [0.62.1] - 2024-06-08
 
@@ -24,10 +712,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [bug](https://github.com/FrankC01/pysui/issues/212) GraphQL GetPackage and GetFunction fail converting to dataclass
-- [bug](https://github.com/FrankC01/pysui/issues/210) Passing str doesn't convert to vector<u8> (GraphQL SuiTransaction)
+- [bug](https://github.com/FrankC01/pysui/issues/210) Passing str doesn't convert to `vector<u8>` (GraphQL SuiTransaction)
 - Fixed handling case of unresolvable UpgradeCap fetch in GraphQL SuiTransaction `publish_upgrade``
 - Regression in arg processor for GraphQL Transaction building
-
 
 ### Changed
 
@@ -50,12 +737,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `client_headers` property to GraphQL clients (read only, produces copy)
 - `with_headers` argument to client `execute...` methods.
   - During execution, merges provided with global headers:
+
   ```python
     hdr = self.client_headers
     hdr = hdr if not with_headers else hdr.update(with_headers)
   ```
+  
 - Single permanent reconnecting async session for `AsyncSuiGQLClient`
-
 
 ### Fixed
 
@@ -119,7 +807,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [PR](https://github.com/FrankC01/pysui/pull/197) - Documentation
 - [PR](https://github.com/FrankC01/pysui/pull/198) - Documentation
-
 
 ### Changed
 
@@ -257,7 +944,7 @@ fields and format results, while similar, are not guarenteed to be identical. Se
 
 ## [0.51.2] - 2024-01-29
 
-** BREAKING CHANGES **
+**BREAKING CHANGES**
 
 ### Added
 
@@ -318,7 +1005,7 @@ SuiConfig.user_config() regression.
 
 ## [0.50.0] - 2023-12-27
 
-** BREAKING CHANGES **
+**BREAKING CHANGES**
 
 ### Added
 
@@ -393,11 +1080,10 @@ SuiConfig.user_config() regression.
 ### Changed
 
 - [enhancement](https://github.com/FrankC01/pysui/issues/176):
-  * Added 'aliases' topic in documentation with more details and examples
+  - Added 'aliases' topic in documentation with more details and examples
 - Added optional 'make_active' flag to:
-  * SuiConfig.create_new_keypair_and_address
-  * SuiConfig.recover_keypair_and_address
-
+  - SuiConfig.create_new_keypair_and_address
+  - SuiConfig.recover_keypair_and_address
 
 ### Removed
 
@@ -472,7 +1158,6 @@ SuiConfig.user_config() regression.
 
 ### Removed
 
-
 ## [0.37.2] - Unpublished
 
 ### Added
@@ -486,7 +1171,6 @@ SuiConfig.user_config() regression.
 - Bumped supported Sui RPC to 1.13.0
 
 ### Removed
-
 
 ## [0.37.1] - 2023-10-09
 
@@ -527,7 +1211,6 @@ SuiConfig.user_config() regression.
 
 ### Removed
 
-
 ## [0.36.0] - 2023-09-16
 
 ### Added
@@ -552,7 +1235,7 @@ SuiConfig.user_config() regression.
 ### Fixed
 
 - [bug](https://github.com/FrankC01/pysui/issues/163) uleb128 encoding of
-pure vectors (i.e. vector<u8>, etc.)
+pure vectors (i.e. `vector<u8>`, etc.)
 
 ### Changed
 
@@ -632,7 +1315,6 @@ was replaced but validation routine not updated
 
 ### Removed
 
-
 ## [0.33.0] - 2023-08-11
 
 **BREAKING CHANGE**
@@ -650,11 +1332,15 @@ built specific to your platform.
 - [enhancement](https://github.com/FrankC01/pysui/issues/143) Ability to add a new key to the
   SuiConfig. The argument can either be a Sui keystring _or_ a dict for importing keys exported from Wallet. The
   dict must take the form of:
+
   ```python
     {
       'wallet_key':'0x.....',             # Wallet exported key hex string (66 chars with 0x prefix)
       'key_scheme': SignatureScheme.XYZ   # Where XYZ is one of {ED25519, SECP256k1, SECP256r1}
     }
+
+  ```
+
 - The concert with the above enhancement, if initiating `pysui` with `SuiConfig.user_config(...)` the `prv_keys`
   parameter can be a list of Sui keystrings, the dict as described above, or both.
 
@@ -664,8 +1350,8 @@ built specific to your platform.
 
 ### Changed
 
-- [change]((https://github.com/FrankC01/pysui/issues/144) `pysui` now requires pysui-fastcrypto
-- [change]((https://github.com/FrankC01/pysui/issues/145) Per change above, removed all
+- [change]((<https://github.com/FrankC01/pysui/issues/144>) `pysui` now requires pysui-fastcrypto
+- [change]((<https://github.com/FrankC01/pysui/issues/145>) Per change above, removed all
   but generic SuiKeyPair, SuiPublicKey and SuiPrivateKey classes
 - [change](https://github.com/FrankC01/pysui/issues/147) Allowing transaction command Result in split_coin amounts list
 - `create_new_keypair_and_address` on SuiConfig now takes word_counts (int) instead of mnemonic phrase
@@ -823,8 +1509,6 @@ use SuiTransaction:
   - pay_sui_txn
   - pay_txn
 
-
-
 ## [0.29.1] - Unpublished
 
 ### Added
@@ -846,7 +1530,7 @@ use SuiTransaction:
 - `continue_on_close` argument to subscription `new_event_subscription()` and `new_transaction_subscription()`
 - `client.get_gas()`, `client.get_coin()` and `client.get_objects()` now include a `fetch_all` option.
 - `client.get_objects_for()` now handles large lists
-- Common convenient imports in pysui.__init__.py
+- Common convenient imports in `pysui.__init__.py`
 
 ### Fixed
 
@@ -953,7 +1637,6 @@ use SuiTransaction:
   - TransferObject
 
 ### Removed
-
 
 ## [0.26.0] - 2023-06-20
 
@@ -1422,7 +2105,7 @@ BREAKING Changes
 - Added `checkpoint` field to results of GetTx (sui_getTransaction), None otherwise, as per Sui 0.27.0 updates
 - Added `executedEpoch` to Effects as per Sui 0.27.0 updates
 - CheckpointContents `user_signatures` change to support multi-sig as per Sui 0.27.0 updates
-- Remove redundant code for `sui_config.create_new_keypair_and_address `
+- Remove redundant code for `sui_config.create_new_keypair_and_address`
 - Refactor `sui_bcs.py`
 - Rename `sui_bcs.tkind_from_result` to `sui_bcw.bcs_txkind_from_result`
 
@@ -1790,7 +2473,7 @@ BIG BREAKING CHANGES!
 
 ### Fixed
 
-- [bug] (https://github.com/FrankC01/pysui/issues/46)
+- [bug] (<https://github.com/FrankC01/pysui/issues/46>)
 
 ### Changed
 

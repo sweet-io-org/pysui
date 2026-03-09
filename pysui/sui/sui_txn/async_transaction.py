@@ -56,7 +56,7 @@ from pysui.sui.sui_txresults.single_tx import (
     SuiCoinObject,
 )
 
-from pysui.sui.sui_types import bcs
+from pysui.sui.sui_bcs import bcs
 
 # Standard library logging setup
 logger = logging.getLogger("pysui.async_transaction")
@@ -891,7 +891,7 @@ class SuiTransactionAsync(_SuiTransactionBase):
         .. code-block:: python
 
             # Transfer all coins to one recipient
-            txer = SuiTransaction(client)
+            txer = client.transaction()
             scres = txer.split_coin(coin=primary_coin, amounts=[1000000000, 1000000000])
             txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
 
@@ -1115,6 +1115,7 @@ class SuiTransactionAsync(_SuiTransactionBase):
             type_arguments=[obj_type_tag],
         )
 
+    @versionchanged(version="0.72.0", reason="Support recipient passed as Argument")
     async def transfer_objects(
         self,
         *,
@@ -1122,7 +1123,7 @@ class SuiTransactionAsync(_SuiTransactionBase):
             list[Union[str, ObjectID, ObjectRead, SuiCoinObject, bcs.Argument]],
             SuiArray,
         ],
-        recipient: Union[ObjectID, SuiAddress],
+        recipient: Union[ObjectID, SuiAddress, bcs.Argument],
     ) -> bcs.Argument:
         """transfer_objects Transfers one or more objects to a recipient.
 
@@ -1137,7 +1138,9 @@ class SuiTransactionAsync(_SuiTransactionBase):
         assert isinstance(
             transfers, (list, SuiArray, bcs.Argument)
         ), "Unsupported trasfers collection type"
-        assert isinstance(recipient, (ObjectID, SuiAddress)), "invalid recipient type"
+        assert isinstance(
+            recipient, (ObjectID, SuiAddress, bcs.Argument)
+        ), "invalid recipient type"
         if isinstance(transfers, (list, SuiArray)):
             transfers = transfers if isinstance(transfers, list) else transfers.array
             coerced_transfers: list = []
@@ -1151,9 +1154,12 @@ class SuiTransactionAsync(_SuiTransactionBase):
                 else:
                     coerced_transfers.append(txfer)
             transfers = await self._resolve_arguments(coerced_transfers)
-        return self.builder.transfer_objects(
-            tx_builder.PureInput.as_input(recipient), transfers
+        recipient = (
+            tx_builder.PureInput.as_input(recipient)
+            if not isinstance(recipient, bcs.Argument)
+            else recipient
         )
+        return self.builder.transfer_objects(recipient, transfers)
 
     async def transfer_sui(
         self,

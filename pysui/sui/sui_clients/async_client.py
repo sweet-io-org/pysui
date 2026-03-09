@@ -74,22 +74,52 @@ class SuiClient(ClientMixin):
     """Sui Asyncrhonous Client."""
 
     @versionchanged(version="0.28.0", reason="Added logging")
+    @versionchanged(
+        version="0.85.0",
+        reason="Proxy support https://github.com/FrankC01/pysui/issues/311",
+    )
     def __init__(
         self,
         config: SuiConfig,
-        request_type: SuiRequestType = SuiRequestType.WAITFORLOCALEXECUTION,
+        request_type: Optional[SuiRequestType] = SuiRequestType.WAITFORLOCALEXECUTION,
+        proxies: Optional[dict] = None,
     ) -> None:
         """Client initializer."""
         super().__init__(config, request_type)
+        # Use the most secure SSL protocol available
+        # PROTOCOL_TLS_CLIENT (Python 3.12+) is more secure than PROTOCOL_TLS
+        # if hasattr(ssl, 'PROTOCOL_TLS_CLIENT'):
+        #     ssl_protocol = ssl.PROTOCOL_TLS_CLIENT
+        # else:
+        #     ssl_protocol = ssl.PROTOCOL_TLS
+        ssl_protocol = ssl.PROTOCOL_TLS
+
         self._client = httpx.AsyncClient(
             http2=True,
             timeout=120.0,
-            verify=ssl.SSLContext(ssl.PROTOCOL_SSLv23),
+            verify=ssl.SSLContext(ssl_protocol),
+            proxy=proxies,
         )
         self._rpc_api = {}
         self._schema_dict = {}
         self._fetch_common_descriptors()
         logger.info(f"Initialized asynchronous client for {config.rpc_url}")
+
+    @versionadded(version="0.87.0", reason="Parity with GraphQL and gRPC client.")
+    def transaction(self, **kwargs) -> Any:
+        """Return a synchronous SuiTransaction.
+
+        :param initial_sender: The address of the sender of the transaction, defaults to None
+        :type initial_sender: Union[str, SigningMultiSig], optional
+        :param compress_inputs: Reuse identical inputs, defaults to False
+        :type compress_inputs: bool,optional
+        :param merge_gas_budget: If True will take available gas not in use for paying for transaction, defaults to False
+        :type merge_gas_budget: bool, optional
+        """
+        import pysui.sui.sui_txn.async_transaction as asynctxn
+
+        kwargs["client"] = self
+        return asynctxn.SuiTransaction(**kwargs)
 
     @property
     def is_synchronous(self) -> bool:
@@ -379,6 +409,9 @@ class SuiClient(ClientMixin):
         version="0.34.0",
         reason="Added faucet check. Will fail gracefull setting SuiRpcResult",
     )
+    @versionchanged(
+        version="0.84.0", reason="Mysten changed faucet request url and behavior."
+    )
     async def get_gas_from_faucet(self, for_address: SuiAddress = None) -> Any:
         """get_gas_from_faucet Gets gas from SUI faucet.
 
@@ -390,30 +423,6 @@ class SuiClient(ClientMixin):
         """
         for_address = for_address or self.config.active_address
 
-        async def _faucet_status(furl: str, task_id: str) -> SuiRpcResult:
-            while True:
-                result = await self._client.get(
-                    furl + task_id,
-                ).json()
-                if result["error"]:
-                    return SuiRpcResult(False, f"Error on status for task {task_id}")
-                elif result["status"]["status"] == "SUCCEEDED":
-                    return SuiRpcResult(
-                        True,
-                        None,
-                        FaucetGasRequest.from_dict(
-                            {
-                                "transferred_gas_objects": result["status"][
-                                    "transferred_gas_objects"
-                                ]["sent"]
-                            }
-                        ),
-                    )
-                elif result["status"]["status"] == "INPROGRESS":
-                    pass
-                else:
-                    return SuiRpcResult(False, result)
-
         try:
             if self.config.faucet_url:
                 s1 = await self._client.post(
@@ -421,26 +430,27 @@ class SuiClient(ClientMixin):
                     headers=GetObjectsOwnedByAddress(for_address).header,
                     json={"FixedAmountRequest": {"recipient": f"{for_address}"}},
                 )
-                # If exhausted requests
+                s1j = s1.json()
+                if "status" in s1j:
+                    if s1j.get("status") == "Success":
+                        return SuiRpcResult(True, None, FaucetGasRequest.from_dict(s1j))
+                    else:
+                        return SuiRpcResult(False, s1.text)
+
                 if s1.status_code == 429:
                     return SuiRpcResult(False, s1.reason_phrase)
-                result = s1.json()
-                if result["error"] is None:
-                    faucet_status = (
-                        DEVNET_FAUCET_STATUS_URLV1
-                        if self.config.environment == "devnet"
-                        else TESTNET_FAUCET_STATUS_URLV1
-                    )
-                    return await _faucet_status(faucet_status, result["task"])
-                return SuiRpcResult(False, result["error"])
             else:
                 return SuiRpcResult(False, "Faucet not enabled for this configuration.")
         except JSONDecodeError as jexc:
             return SuiRpcResult(False, f"JSON Decoder Error {jexc.msg}", vars(jexc))
         except httpx.ReadTimeout as hexc:
             return SuiRpcResult(False, "HTTP read timeout error", vars(hexc))
+        except httpx.RequestError as rexc:
+            return SuiRpcResult(False, "HTTP request error", vars(rexc))
         except TypeError as texc:
             return SuiRpcResult(False, "Type error", vars(texc))
+        except Exception as exc:
+            return SuiRpcResult(False, f"Unhandled exception: {str(exc)}", vars(exc))
 
     @versionchanged(
         version="0.28.0",

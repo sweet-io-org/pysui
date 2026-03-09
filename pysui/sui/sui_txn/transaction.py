@@ -1,13 +1,5 @@
 #    Copyright Frank V. Castellucci
-#    Licensed under the Apache License, Version 2.0 (the "License");
-#    you may not use this file except in compliance with the License.
-#    You may obtain a copy of the License at
-#        http://www.apache.org/licenses/LICENSE-2.0
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS,
-#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#    See the License for the specific language governing permissions and
-#    limitations under the License.
+#    SPDX-License-Identifier: Apache-2.0
 
 # -*- coding: utf-8 -*-
 
@@ -31,7 +23,6 @@ from pysui.sui.sui_builders.base_builder import (
     sui_builder,
 )
 from pysui.sui.sui_clients.common import ClientMixin
-from pysui.sui.sui_pgql.pgql_clients import BaseSuiGQLClient
 from pysui.sui.sui_txn.signing_ms import SignerBlock, SigningMultiSig
 import pysui.sui.sui_txn.transaction_builder as tx_builder
 from pysui.sui.sui_txn.txn_deser import (
@@ -47,7 +38,7 @@ from pysui.sui.sui_txresults.package_meta import (
 from pysui.sui.sui_txresults.single_tx import (
     TransactionConstraints,
 )
-from pysui.sui.sui_types import bcs
+from pysui.sui.sui_bcs import bcs
 from pysui.sui.sui_types.collections import SuiArray, SuiMap
 from pysui.sui.sui_types.scalars import (
     SuiNullType,
@@ -64,15 +55,6 @@ if not logging.getLogger().handlers:
 
 class _DebugInspectTransaction(_NativeTransactionBuilder):
     """_DebugInspectTransaction added for malformed inspection results."""
-
-    # _DEFAULT_INSPECT_TX_ADDITIONL_ARGS: Final[dict] = {
-    #     "gasBudget": SuiNullType(),
-    #     "gasObjects": SuiNullType(),
-    #     "items": SuiNullType(),
-    #     "gasSponsor": SuiNullType(),
-    #     "showRawTxnDataAndEffects": SuiNullType(),
-    #     "skipChecks": SuiNullType(),
-    # }
 
     @sui_builder()
     def __init__(
@@ -99,8 +81,6 @@ class _DebugInspectTransaction(_NativeTransactionBuilder):
         """
         super().__init__(
             "sui_devInspectTransactionBlock",
-            # handler_cls=TxInspectionResult,
-            # handler_func="factory",
         )
 
         if additional_args is None or isinstance(additional_args, SuiNullType):
@@ -161,7 +141,7 @@ class _SuiTransactionBase:
     def __init__(
         self,
         *,
-        client: Union[ClientMixin, BaseSuiGQLClient],
+        client: ClientMixin,
         compress_inputs: bool = True,
         initial_sender: Union[SuiAddress, SigningMultiSig] = None,
         merge_gas_budget: bool = False,
@@ -409,12 +389,6 @@ class _SuiTransactionBase:
                 case _:
                     raise ValueError(f"Uknown class type handler {clz_name}")
 
-    def _to_bytes_from_str(self, inbound: Union[str, SuiString]) -> list[int]:
-        """Utility to convert base64 string to bytes then as list of u8."""
-        return list(
-            base64.b64decode(inbound if isinstance(inbound, str) else inbound.value)
-        )
-
     @versionchanged(
         version="0.50.0",
         reason="Removed with_unpublished_dependencies and skip_fetch_latest_git_deps replace with `args_list`",
@@ -431,13 +405,12 @@ class _SuiTransactionBase:
             src_path,
             args_list,
         )
-        modules = list(map(self._to_bytes_from_str, compiled_package.compiled_modules))
         dependencies = [
             bcs.Address.from_str(x if isinstance(x, str) else x.value)
             for x in compiled_package.dependencies
         ]
         digest = bcs.Digest.from_bytes(compiled_package.package_digest)
-        return modules, dependencies, digest
+        return compiled_package.compiled_modules, dependencies, digest
 
     def _from_bytecode(
         self,
@@ -536,6 +509,9 @@ class _SuiTransactionBase:
         version="0.35.0",
         reason="Option to omit sender/sponsor",
     )
+    @deprecated(
+        version="0.64.0", reason="Use GraphQL serialize_to_wallet_standard function"
+    )
     def serialize(self, include_sender_sponsor: Optional[bool] = True) -> bytes:
         """."""
         tbuilder = self._serialize(include_sender_sponsor)
@@ -545,6 +521,9 @@ class _SuiTransactionBase:
     @versionadded(
         version="0.32.0",
         reason="DeSerialize transaction builder state",
+    )
+    @deprecated(
+        version="0.64.0", reason="Use GraphQL deserialize_to_transaction function"
     )
     def deserialize(self, state_ser: bytes):
         """."""

@@ -1,13 +1,5 @@
 #    Copyright Frank V. Castellucci
-#    Licensed under the Apache License, Version 2.0 (the "License");
-#    you may not use this file except in compliance with the License.
-#    You may obtain a copy of the License at
-#        http://www.apache.org/licenses/LICENSE-2.0
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS,
-#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#    See the License for the specific language governing permissions and
-#    limitations under the License.
+#    SPDX-License-Identifier: Apache-2.0
 
 # -*- coding: utf-8 -*-
 # pylint: disable=too-many-instance-attributes
@@ -23,7 +15,7 @@ from functools import singledispatchmethod
 from deprecated.sphinx import versionchanged, versionadded
 from pysui.sui.sui_txresults.single_tx import TransactionConstraints
 
-from pysui.sui.sui_types import bcs
+from pysui.sui.sui_bcs import bcs
 from pysui.sui.sui_types.address import SuiAddress
 from pysui.sui.sui_types.scalars import (
     ObjectID,
@@ -37,6 +29,7 @@ from pysui.sui.sui_types.scalars import (
     SuiU64,
     SuiU8,
 )
+from pysui.sui.sui_utils import serialize_uint32_as_uleb128
 
 # Well known aliases
 _SUI_PACKAGE_ID: bcs.Address = bcs.Address.from_str("0x2")
@@ -45,25 +38,7 @@ _SUI_PACAKGE_AUTHORIZE_UPGRADE: str = "authorize_upgrade"
 _SUI_PACAKGE_COMMIt_UPGRADE: str = "commit_upgrade"
 
 # Standard library logging setup
-logger = logging.getLogger("pysui.transaction_builder")
-if not logging.getLogger().handlers:
-    logger.addHandler(logging.NullHandler())
-    logger.propagate = False
-
-
-# Command aliases
-def serialize_uint32_as_uleb128(cls, value: int) -> bytes:
-    """."""
-    ret = bytearray()
-    while value >= 0x80:
-        # Write 7 (lowest) bits of data and set the 8th bit to 1.
-        byte = value & 0x7F
-        ret.append(byte | 0x80)
-        value >>= 7
-
-    # Write the remaining bits of data and set the highest bit to 0.
-    ret.append(value)
-    return bytes(ret)
+logger = logging.getLogger(__name__)
 
 
 @versionchanged(version="0.17.0", reason="Support bool arguments")
@@ -201,9 +176,7 @@ class PureInput:
         """Convert str to list of bytes."""
         logger.debug(f"str->pure {arg}")
         byte_list = list(bytearray(arg, encoding="utf-8"))
-        length_prefix = list(
-            bytearray(serialize_uint32_as_uleb128(None, len(byte_list)))
-        )
+        length_prefix = list(bytearray(serialize_uint32_as_uleb128(len(byte_list))))
         return length_prefix + byte_list
 
     @pure.register
@@ -262,7 +235,7 @@ class PureInput:
         """."""
         logger.debug(f"list->pure {arg}")
         stage_list = [PureInput.pure(x) for x in arg]
-        res_list = list(serialize_uint32_as_uleb128(None, len(stage_list)))
+        res_list = list(serialize_uint32_as_uleb128(len(stage_list)))
         for stage_pure in stage_list:
             res_list.extend(stage_pure)
         return res_list
@@ -346,7 +319,11 @@ class ProgrammableTransactionBuilder:
         return bcs.Argument("Input", out_index)
 
     @versionchanged(version="0.20.0", reason="Check for duplication. See bug #99")
-    def input_obj(self, key: bcs.BuilderArg, object_arg: bcs.ObjectArg) -> bcs.Argument:
+    def input_obj(
+        self,
+        key: bcs.BuilderArg,
+        object_arg: bcs.ObjectArg,
+    ) -> bcs.Argument:
         """."""
         logger.debug("Adding object input")
         out_index = len(self.inputs)
@@ -373,8 +350,14 @@ class ProgrammableTransactionBuilder:
         return bcs.Argument("Input", out_index)
 
     @versionadded(version="0.54.0", reason="Support stand-alone ObjectArg")
-    def input_obj_from_objarg(self, object_arg: bcs.ObjectArg) -> bcs.Argument:
+    def input_obj_from_objarg(
+        self, object_arg: Union[bcs.ObjectArg, bcs.Optional]
+    ) -> bcs.Argument:
         """."""
+        if isinstance(object_arg, bcs.Optional):
+            object_arg = object_arg.value
+            # oval = object_arg.value.value.ObjectID
+        # else:
         oval: bcs.Address = object_arg.value.ObjectID
         barg = bcs.BuilderArg("Object", oval)
         return self.input_obj(barg, object_arg)
@@ -462,12 +445,18 @@ class ProgrammableTransactionBuilder:
                 argrefs.append(self.input_pure(arg))
             elif isinstance(arg, bcs.ObjectArg):
                 argrefs.append(self.input_obj_from_objarg(arg))
-            elif isinstance(arg, bcs.Optional):
+            elif isinstance(arg, bcs.Optional) and isinstance(arg.value, bcs.ObjectArg):
+                argrefs.append(self.input_obj_from_objarg(arg))
+            elif isinstance(arg, bcs.Optional) and not isinstance(
+                arg.value, bcs.ObjectArg
+            ):
                 argrefs.append(self.input_pure(PureInput.as_input(arg)))
             elif isinstance(arg, tuple):
                 argrefs.append(self.input_obj(*arg))
-            elif isinstance(arg, (bcs.Argument, bcs.OptionalU64)):
+            elif isinstance(arg, bcs.Argument):
                 argrefs.append(arg)
+            elif isinstance(arg, tuple(bcs.OPTIONAL_SCALARS)):
+                argrefs.append(self.input_pure(PureInput.as_input(arg)))
             elif isinstance(arg, list):
                 argrefs.append(self.input_pure(PureInput.as_input(arg)))
             elif isinstance(arg, bcs.Variable):
@@ -549,17 +538,26 @@ class ProgrammableTransactionBuilder:
 
     def transfer_objects(
         self,
-        recipient: bcs.BuilderArg,
+        recipient: Union[bcs.BuilderArg, bcs.Argument],
         object_ref: Union[
             bcs.Argument,
             list[
-                Union[bcs.Argument, bcs.ObjectArg, tuple[bcs.BuilderArg, bcs.ObjectArg]]
+                Union[
+                    bcs.Argument,
+                    bcs.ObjectArg,
+                    tuple[bcs.BuilderArg, bcs.ObjectArg],
+                ]
             ],
         ],
     ) -> bcs.Argument:
         """Setup a TransferObjects command and return it's result Argument."""
         logger.debug("Creating TransferObjects transaction")
-        receiver_arg = self.input_pure(recipient)
+        receiver_arg = (
+            recipient
+            if isinstance(recipient, bcs.Argument)
+            else self.input_pure(recipient)
+        )
+        # receiver_arg = self.input_pure(recipient)
         from_args: list[bcs.Argument] = []
         if isinstance(object_ref, list):
             for fcoin in object_ref:
@@ -574,11 +572,14 @@ class ProgrammableTransactionBuilder:
             bcs.Command("TransferObjects", bcs.TransferObjects(from_args, receiver_arg))
         )
 
+    @versionchanged(
+        version="0.76.0", reason="https://github.com/FrankC01/pysui/issues/261"
+    )
     def transfer_sui(
         self,
         recipient: bcs.BuilderArg,
         from_coin: Union[bcs.Argument, tuple[bcs.BuilderArg, bcs.ObjectArg]],
-        amount: Optional[Union[bcs.BuilderArg, bcs.Optional]] = None,
+        amount: Optional[Union[bcs.BuilderArg, bcs.OptionalU64]] = None,
     ) -> bcs.Argument:
         """Setup a TransferObjects for Sui Coins.
 
@@ -588,16 +589,22 @@ class ProgrammableTransactionBuilder:
         reciever_arg = self.input_pure(recipient)
         if amount and isinstance(amount, bcs.BuilderArg):
             coin_arg = self.split_coin(from_coin=from_coin, amounts=[amount])
-        elif isinstance(amount, bcs.Optional):
-            o_amount: bcs.Optional = amount
-            if o_amount.value:
+        elif isinstance(amount, bcs.OptionalU64):
+            if amount.value:
                 coin_arg = self.split_coin(
-                    from_coin=from_coin, amounts=[o_amount.value]
+                    from_coin=from_coin,
+                    amounts=[
+                        PureInput.as_input(SuiU64(bcs.U64.int_safe(amount.value)))
+                    ],
                 )
             else:
                 coin_arg = from_coin
-        elif isinstance(from_coin, bcs.Argument):
+        else:
             coin_arg = from_coin
+        if isinstance(coin_arg, bcs.Argument):
+            pass
+        elif isinstance(coin_arg, bcs.ObjectArg):
+            coin_arg = self.input_obj_from_objarg(coin_arg)
         else:
             coin_arg = self.input_obj(*from_coin)
         return self.command(

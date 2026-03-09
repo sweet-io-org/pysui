@@ -5,12 +5,10 @@
 
 """Sample module for pysui beta Transaction Builder leveraging Sui GraphQL."""
 
-import base64
-from pysui import SuiConfig
+from pysui import SyncGqlClient, PysuiConfiguration
 from pysui.sui.sui_clients.common import SuiRpcResult
 import pysui.sui.sui_pgql.pgql_query as qn
 import pysui.sui.sui_pgql.pgql_types as pgql_type
-from pysui.sui.sui_pgql.pgql_clients import SuiGQLClient
 from pysui.sui.sui_pgql.pgql_sync_txn import SuiTransaction
 
 
@@ -32,14 +30,14 @@ def handle_result(result: SuiRpcResult) -> SuiRpcResult:
 
 def transaction_inspect(txb: SuiTransaction):
     """Uses defaults for DryRunTransaction and just the TransactionKind"""
-    raw_kind = txb.raw_kind()
     # Print the TransactionType BCS (pre-serialized) structure
-    print(raw_kind.to_json(indent=2))
+    print(txb.raw_kind().to_json(indent=2))
     # Execute the dry run
     handle_result(
         txb.client.execute_query_node(
             with_node=qn.DryRunTransactionKind(
-                tx_bytestr=base64.b64encode(raw_kind.serialize()).decode()
+                tx_bytestr=txb.raw_kind(),
+                tx_meta={"sender": txb.client.config.active_address},
             )
         )
     )
@@ -73,26 +71,22 @@ def transaction_dryrun_with_gas(txer: SuiTransaction, coin_ids: list[str]):
 
 def transaction_execute(txer: SuiTransaction):
     """Uses fully built and serialized TransactionData for ExecuteTransaction."""
-    # Still returns legacy SuiSignature array
-    tx_b64, sig_array = txer.build_and_sign()
     # Execute the transaction
     handle_result(
         txer.client.execute_query_node(
-            with_node=qn.ExecuteTransaction(tx_bytestr=tx_b64, sig_array=sig_array)
+            with_node=qn.ExecuteTransaction(**txer.build_and_sign())
         )
     )
 
 
-def demo_tx_split(client: SuiGQLClient):
+def demo_tx_split(client: SyncGqlClient):
     """Demonstrate GraphQL Beta PTB with split and transfer."""
-    txb = SuiTransaction(client=client)
+    txb: SuiTransaction = client.transaction()
     scoin = txb.split_coin(
         coin=txb.gas,
         amounts=[100000000],
     )
-    txb.transfer_objects(
-        transfers=[scoin], recipient=client.config.active_address.address
-    )
+    txb.transfer_objects(transfers=[scoin], recipient=client.config.active_address)
     #### Uncomment the action to take
     transaction_inspect(txb)
     # transaction_dryrun(txb)
@@ -105,9 +99,9 @@ def demo_tx_split(client: SuiGQLClient):
     # transaction_execute(txb)
 
 
-def demo_tx_split_equal(client: SuiGQLClient):
+def demo_tx_split_equal(client: SyncGqlClient):
     """Demonstrate GraphQL Beta PTB with split coin to equal parts and keeps in owner."""
-    txb = SuiTransaction(client=client)
+    txb: SuiTransaction = client.transaction()
     scoin = txb.split_coin_equal(
         coin="<ENTER COID ID TO SPLIT STRING>",
         split_count=3,
@@ -124,40 +118,16 @@ def demo_tx_split_equal(client: SuiGQLClient):
     # transaction_execute(txb)
 
 
-def demo_tx_split_distribute(client: SuiGQLClient):
-    """Demonstrate GraphQL Beta PTB with split coin to equal parts and transfer to other address (or same)."""
-    txb = SuiTransaction(client=client)
-    scoins = txb.split_coin_and_return(
-        coin="<ENTER COID ID TO SPLIT STRING>",
-        split_count=4,
-    )
-    txb.transfer_objects(
-        transfers=scoins,
-        recipient="<ENTER RECIPIENT ADDRESS STRING>",
-    )
-
-    #### Uncomment the action to take
-    # transaction_inspect(txb)
-    transaction_dryrun(txb)
-    # transaction_dryrun_with_gas(
-    #     txb,
-    #     [
-    #         "<ENTER ONE OR MORE COIN IDS TO PAY",
-    #     ],
-    # )
-    # transaction_execute(txb)
-
-
-def demo_tx_unstake(client: SuiGQLClient):
+def demo_tx_unstake(client: SyncGqlClient):
     """Demonstrate GraphQL Beta PTB with unstaking 1 coin if found."""
-    owner = client.config.active_address.address
+    owner = client.config.active_address
 
     skblk: pgql_type.SuiStakedCoinsGQL = handle_result(
         client.execute_query_node(with_node=qn.GetDelegatedStakes(owner=owner))
     )
     # Only execute if staked coin found
     if skblk.staked_coins:
-        txb = SuiTransaction(client=client)
+        txb: SuiTransaction = client.transaction()
         txb.unstake_coin(staked_coin=skblk.staked_coins[0])
         transaction_inspect(txb)
         # transaction_dryrun(txb)
@@ -172,9 +142,9 @@ def demo_tx_unstake(client: SuiGQLClient):
         print("No staked coins found")
 
 
-def demo_tx_transfer_sui(client: SuiGQLClient):
+def demo_tx_transfer_sui(client: SyncGqlClient):
     """Demonstrate GraphQL Beta PTB with transferring sui."""
-    txb = SuiTransaction(client=client)
+    txb: SuiTransaction = client.transaction()
     txb.transfer_sui(
         recipient="<ENTER RECIPIENT ADDRESS STRING>",
         from_coin=txb.gas,
@@ -191,9 +161,9 @@ def demo_tx_transfer_sui(client: SuiGQLClient):
     # transaction_execute(txb)
 
 
-def demo_tx_public_transfer(client: SuiGQLClient):
+def demo_tx_public_transfer(client: SyncGqlClient):
     """Demonstrate GraphQL Beta PTB with public transfer object."""
-    txb = SuiTransaction(client=client)
+    txb: SuiTransaction = client.transaction()
     txb.public_transfer_object(
         object_to_send="<ENTER OBJECT ID TO SEND STRING>",
         recipient="<ENTER RECIPIENT ADDRESS STRING>",
@@ -210,13 +180,11 @@ def demo_tx_public_transfer(client: SuiGQLClient):
     # transaction_execute(txb)
 
 
-def demo_tx_publish(client: SuiGQLClient):
+def demo_tx_publish(client: SyncGqlClient):
     """Demonstrate publishing a package."""
-    txb = SuiTransaction(client=client)
+    txb: SuiTransaction = client.transaction()
     upg_cap = txb.publish(project_path="<ENTER SUI MOVE PROJECT PATH>")
-    txb.transfer_objects(
-        transfers=[upg_cap], recipient=client.config.active_address.address
-    )
+    txb.transfer_objects(transfers=[upg_cap], recipient=client.config.active_address)
 
     transaction_inspect(txb)
     # transaction_dryrun(txb)
@@ -230,16 +198,18 @@ def demo_tx_publish(client: SuiGQLClient):
 
 
 if __name__ == "__main__":
-    client_init = SuiGQLClient(
+    client_init = SyncGqlClient(
         write_schema=False,
-        config=SuiConfig.default_config(),
+        pysui_config=PysuiConfiguration(
+            group_name=PysuiConfiguration.SUI_GQL_RPC_GROUP
+        ),
     )
-    print(f"Schema version {client_init.schema_version}")
+    print(f"Default schema base version '{client_init.base_schema_version}'")
+    print(f"Default schema build version '{client_init.schema_version()}'")
     try:
-        print()
-        # demo_tx_split(client_init)
+        # print()
+        demo_tx_split(client_init)
         # demo_tx_split_equal(client_init)
-        # demo_tx_split_distribute(client_init)
         # demo_tx_public_transfer(client_init)
         # demo_tx_unstake(client_init)
         # demo_tx_transfer_sui(client_init)

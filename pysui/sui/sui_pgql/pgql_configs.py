@@ -12,37 +12,33 @@ import dataclasses_json
 
 import pysui.sui.sui_pgql.pgql_types as pgql_type
 
-# TODO: Temporary Protocol Config hack, remove when ready
-_QUERY = """
+
+_QUERY_BETA = """
 
     query {
         chainIdentifier
-        checkpoints (last: 1) {
-            nodes {
-                sequenceNumber
-                timestamp
-                epoch {
-                        referenceGasPrice
-                    }
-            }
+        checkpoint {
+            sequenceNumber
+            timestamp
+            epoch {
+                    referenceGasPrice
+                }
         }
         serviceConfig {
-            availableVersions
-            enabledFeatures
+            mutationTimeoutMs
+            queryTimeoutMs
             maxQueryDepth
             maxQueryNodes
             maxOutputNodes
-            maxDbQueryCost
-            defaultPageSize
-            maxPageSize
-            mutationTimeoutMs
-            requestTimeoutMs
+            maxTransactionPayloadSize
             maxQueryPayloadSize
+            maxMultiGetSize
             maxTypeArgumentDepth
+            maxTypeArgumentWidth
             maxTypeNodes
             maxMoveValueDepth
         }
-      protocolConfig(protocolVersion:44) {
+      protocolConfigs {
           protocolVersion
           configs {
             key
@@ -62,21 +58,20 @@ _QUERY = """
 class ServiceConfigGQL:
     """Sui GraphQL service controls."""
 
-    availableVersions: list[str]
-    mutationTimeoutMs: int
-    maxTypeArgumentDepth: int
-    maxTypeNodes: int
-    maxMoveValueDepth: int
-
-    enabledFeatures: list[str]
     maxQueryDepth: int
     maxQueryNodes: int
     maxOutputNodes: int
-    defaultPageSize: int
-    maxDbQueryCost: int
-    maxPageSize: int
-    requestTimeoutMs: int
     maxQueryPayloadSize: int
+    maxMultiGetSize: int
+    # defaultPageSize: int
+    # maxPageSize: str
+    maxTypeArgumentDepth: int
+    maxTypeArgumentWidth: int
+    maxTypeNodes: int
+    maxMoveValueDepth: int
+    mutationTimeoutMs: Optional[int] = dataclasses.field(default=None)
+    queryTimeoutMs: Optional[int] = dataclasses.field(default=None)
+    maxTransactionPayloadSize: Optional[int] = dataclasses.field(default=None)
 
 
 @dataclasses_json.dataclass_json(letter_case=dataclasses_json.LetterCase.CAMEL)
@@ -85,12 +80,12 @@ class CheckpointNodeGQL:
     sequenceNumber: int
     timestamp: str
     epoch: Any
-    reference_gas_price: Optional[str] = None
+    reference_gas_price: Optional[int] = None
 
     def __post_init__(self):
         """."""
         if "referenceGasPrice" in self.epoch:
-            self.reference_gas_price = self.epoch["referenceGasPrice"]
+            self.reference_gas_price = int(self.epoch["referenceGasPrice"])
 
 
 @dataclasses_json.dataclass_json(letter_case=dataclasses_json.LetterCase.CAMEL)
@@ -99,14 +94,13 @@ class CheckpointConnectionGQL:
     nodes: list[CheckpointNodeGQL]
 
 
-# TODO: Make primary when changes moved through mainnet
 @dataclasses_json.dataclass_json(letter_case=dataclasses_json.LetterCase.CAMEL)
 @dataclasses.dataclass
 class SuiConfigGQL:
     chainIdentifier: str
     serviceConfig: ServiceConfigGQL
-    protocolConfig: pgql_type.ProtocolConfigGQL
-    checkpoints: CheckpointConnectionGQL
+    protocolConfigs: pgql_type.ProtocolConfigGQL
+    checkpoint: CheckpointNodeGQL
     gqlEnvironment: Optional[str] = None
 
     @classmethod
@@ -115,6 +109,6 @@ class SuiConfigGQL:
         return SuiConfigGQL.from_dict(in_data)
 
 
-def pgql_config(env: str) -> tuple[str, Callable]:
-    """."""
-    return _QUERY, SuiConfigGQL.from_query
+def pgql_config(env: str, sversion: Optional[str] = None) -> tuple[str, Callable]:
+    """Get the configuration for Sui GraphQL."""
+    return _QUERY_BETA, SuiConfigGQL.from_query

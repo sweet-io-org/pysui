@@ -40,10 +40,12 @@ class FaucetGas(DataClassJsonMixin):
 class FaucetGasRequest(DataClassJsonMixin):
     """Result of faucet get gas."""
 
-    transferred_gas_objects: list[FaucetGas] = field(
-        metadata=config(letter_case=LetterCase.CAMEL)
-    )
-    error: Optional[dict] = field(default_factory=dict)
+    status: str
+    coins_sent: list[dict[str, str]]
+    # transferred_gas_objects: list[FaucetGas] = field(
+    #     metadata=config(letter_case=LetterCase.CAMEL)
+    # )
+    # error: Optional[dict] = field(default_factory=dict)
 
 
 # ObjectRead
@@ -919,23 +921,6 @@ class DynamicFields(DataClassJsonMixin):
     data: list[DynamicFieldInfo]
     has_next_page: bool = field(metadata=config(letter_case=LetterCase.CAMEL))
     next_cursor: Union[str, None] = field(metadata=config(letter_case=LetterCase.CAMEL))
-
-
-@dataclass
-class LoadedChildObject(DataClassJsonMixin):
-    """From sui_getLoadedChildObjects."""
-
-    object_id: str = field(metadata=config(letter_case=LetterCase.CAMEL))
-    sequence_number: str = field(metadata=config(letter_case=LetterCase.CAMEL))
-
-
-@dataclass
-class LoadedChildObjectsResponse(DataClassJsonMixin):
-    """From sui_getLoadedChildObjects."""
-
-    loaded_child_objects: list[LoadedChildObject] = field(
-        metadata=config(letter_case=LetterCase.CAMEL)
-    )
 
 
 @dataclass

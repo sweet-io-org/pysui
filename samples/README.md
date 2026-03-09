@@ -5,91 +5,90 @@ Samples and utilities included in both the `pysui` repo as well as when installi
 
 ## Examples:
 
-- async-gas collects and prints all gas for all addresses found in configuration
-- async-sub Listens on Sui Move events
-- async-sub-txn Listens on Sui Transactions
-- Sample [Wallet](#wallet) providing equivalent functionality as `sui client ...`
-- Sample [WalletG](#walletG) providing equivalent functionality as `sui client ...`
+### async-gas
 
-**Note:** If running from cloned repo, examples are started with `python -m ....`
+Reports all Sui coins for `pysui` addresses.
 
-- `python -m samples.wallet`
-- `python -m samples.walletg`
-- `python -m samples.async_gas`
-- `python -m samples.async_sub`
-- `python -m samples.async_sub_txn`
+### sgqls
 
-**Note:** If running from PyPi install, examples can be started directly
+Writes one or more GraphQL node's schema to folder
 
-- `wallet`
-- `walletg`
-- `async-gas`
-- `async-sub`
-- `async-sub-txn`
-
-### Async Gas
-
-Example demonstrating using the `pysui` SuiAsynchClient. See [DEVELOP](../DEVELOP.md)
-
-### Wallet
-
-Implementation demonstrating most SUI RPC API calls like the SUI CLI (i.e. `sui client ...`).
-
-### WalletG
+### wallet
 
 Implementation demonstrating most commands like the SUI CLI (i.e. `sui client ...`) using Sui GraphQL RPC.
 
-## Runs with default sui configuration or user defined configurations
+### smash
 
-By default, `pysui` will use the `client.yaml` configuration found in `.sui/sui_config/`. See [below](#run-local) for running
-with different configuration (e.g. Local)
+Merges an addresses Sui coins to one
 
-**NOTE**: Sample wallet uses synchronous SuiClient. I leave it up to the ambitious to
-write similar for asynchronous SuiAsynchClient
+### splay
 
-#### Wallet Commands
+Spreads an address coins to itself or one to many other addresses
 
-```bash
-usage: wallet.py [options] command [--command_options]
+### jtobcs
 
-options:
-  -h, --help            show this help message and exit
-  -v, --version         Show pysui SDK version
+Converts a JSON document with BCS specification to a python BCS module (*.py)
 
-commands:
-  {aliases,active-address,addresses,new-address,gas,object,objects,rpcapi,committee,faucet,merge-coin,split-coin,split-coin-equally,transfer-object,transfer-sui,pay,paysui,payallsui,package,publish,call,events,txns}
-    aliases             Sui Address alias management
-    active-address      Shows active address
-    addresses           Shows all addresses
-    new-address         Generate new address and keypair
-    gas                 Shows gas objects and total mist. If owwner or alias not provided, defaults to active-address.
-    object              Show object by id
-    objects             Show all objects. If owwner or alias not provided, defaults to active-address.
-    rpcapi              Show Sui RPC API information
-    committee           Show committee info for epoch
-    faucet              Get additional gas from SUI faucet. If owwner or alias not provided, defaults to active-address.
-    merge-coin          Merge two coins together. If owwner or alias not provided, defaults to active-address.
-    split-coin          Split coin into one or more coins by amount. If owwner or alias not provided, defaults to active-address.
-    split-coin-equally  Split coin into one or more coins equally. If owwner or alias not provided, defaults to active-address.
-    transfer-object     Transfer an object from one address to another. If owwner or alias not provided, defaults to active-address.
-    transfer-sui        Transfer SUI 'mist(s)' to a Sui address. If owwner or alias not provided, defaults to active-address.
-    pay                 Send coin of any type to recipient(s). If owwner or alias not provided, defaults to active-address.
-    paysui              Send SUI coins to a list of addresses. If owwner or alias not provided, defaults to active-address.
-    payallsui           Send all SUI coin(s) to recipient(s). If owwner or alias not provided, defaults to active-address.
-    package             Show normalized package information
-    publish             Publish a SUI package. If owwner or alias not provided, defaults to active-address.
-    call                Call a move contract function. If owwner or alias not provided, defaults to active-address.
-    events              Show events for types
-    txns                Show transaction information
+### bcstoj
+
+Converts a python BCS module to a JSON document (*.json)
+
+### mtobcs
+
+Generate python BCS constructs from published move struct or enum
+
+This requires a json file identifying _one or more_ structures/enums to process. For example, using devnet, this json identifies the a example contract strucutre (assume file name is `parm_object.json`):
+
+```json
+{
+    "targets" : [
+        {
+            "type": "Structure",
+            "value":"0x379096e390310dd7690802fe356ffcf2d7eb7adef458762cd761352b090a1cb1::parms::ParmObject",
+            "out_file": "parm_object.py"
+        }
+    ]
+}
 ```
 
-#### WalletG Commands
+`mtobcs --profile devnet -m parm_object.json`
+
+This will generate a `parm_object.py` file containing the BCS equivalent.
+
+**Note:** If running from cloned repo, examples are started with `python -m ....`
+
+- `python -m samples.async_gasg`
+- `python -m samples.sgqls`
+- `python -m samples.smash`
+- `python -m samples.splay`
+- `python -m samples.walletg`
+- `python -m samples.jtobcs`
+- `python -m samples.bcstoj`
+- `python -m samples.mtobcs`
+
+**Note:** If running from PyPi install, or installed into virtual env with `pip install -e...`, examples can be started directly
+
+- `async-gas`
+- `sgqls`
+- `smash`
+- `splay`
+- `wallet`
+- `jtobcs`
+- `bcstoj`
+- `mtobcs`
+
+#### wallet Commands
 ```shell
 usage: walletg.py [options] command [--command_options]
 
 options:
   -h, --help            show this help message and exit
-  -v, --version         Show pysui SDK version
+  --config CONFIG_NAME  The Pysui Configuration folder to use. Default to '~/.pysui'
+  --group {user,sui_json_config,sui_gql_config}
+                        The GraphQL groups. Default to 'sui_gql_config'
+  --profile {devnet,testnet,mainnet}
+                        The GraphQL profile node. Default to 'devnet' from 'sui_gql_config'
+  -v, --version         Sets flag to show version. Optional.
 
 commands:
   {aliases,active-address,addresses,new-address,gas,object,objects,merge-coin,split-coin,split-coin-equally,transfer-object,transfer-sui,pay,gql-query,tx-dryrun-data,tx-dryrun-kind,execute-signed-tx,package,publish,call,txns}
@@ -107,8 +106,6 @@ commands:
     transfer-sui        Transfer SUI 'mist(s)' to a Sui address. If owwner or alias not provided, defaults to active-address.
     pay                 Send coin of any type to recipient(s). If owwner or alias not provided, defaults to active-address.
     gql-query           Execute a GraphQL query.
-    tx-dryrun-data      Dry run a transaction block (TransactionData).
-    tx-dryrun-kind      Dry run a transaction block kind (TransactionKind).
     execute-signed-tx   Dry run a transaction block (TransactionData).
     package             Show normalized package information
     publish             Publish a SUI package. If owwner or alias not provided, defaults to active-address.
@@ -174,59 +171,4 @@ subcommand:
     mutated             Return transaction events for the mutate object.
     from                Return transaction events from sender address.
     to                  Return transaction events from recipient address.
-```
-
-## Run Local (wallet only)
-
-We've changed the abbility to operate with a local running node to rely on [sui-base](https://github.com/ChainMovers/suibase).
-
-After you've cloned and installed `suibase` you can add the `--local` flag as shown below
-
-Note that this is different if you are swiitching between `envs` using the standard sui configuration.
-
-### Running with `sui-base`
-
-1. Change to your home folder `cd ~/`
-2. `git clone git@github.com:ChainMovers/suibase.git`
-3. `cd suibase`
-4. `./install`
-5. `localnet start` <= This will download sui source code and start a local node (devnet level)
-6. Finally, add the `--local` switch to the command line `pysui` wallet or other samples
-
-Example:
-
-```bash
-wallet --local gas
-```
-
-Or (if running pysui from repo clone):
-
-```bash
-python samples/wallet.py --local gas
-```
-
-### Running with standard sui configuration
-
-If your standard configuration has `envs` that include `localnet`
-
-1. `sui client switch --env localnet
-
-Example:
-
-```bash
-wallet gas
-```
-
-```bash
-walletg gas
-```
-
-Or (if running pysui from repo clone):
-
-```bash
-python samples/wallet.py gas
-```
-
-```bash
-python samples/walletg.py gas
 ```

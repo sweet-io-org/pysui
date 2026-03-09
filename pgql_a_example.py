@@ -8,11 +8,19 @@
 import asyncio
 import base64
 
-from pysui import SuiConfig, SuiRpcResult, AsyncClient
-from pysui.sui.sui_txn import AsyncTransaction
-from pysui.sui.sui_pgql.pgql_clients import AsyncSuiGQLClient
+# import logging
+
+# logging.basicConfig(level=logging.DEBUG)
+
+from pysui import PysuiConfiguration, SuiRpcResult, AsyncGqlClient, SyncGqlClient
+from pysui.sui.sui_pgql.pgql_async_txn import AsyncSuiTransaction
+
 import pysui.sui.sui_pgql.pgql_query as qn
 import pysui.sui.sui_pgql.pgql_types as ptypes
+from pysui.sui.sui_pgql.pgql_utils import (
+    async_get_all_owned_gas_objects,
+    async_get_all_owned_objects,
+)
 
 
 def handle_result(result: SuiRpcResult) -> SuiRpcResult:
@@ -31,29 +39,40 @@ def handle_result(result: SuiRpcResult) -> SuiRpcResult:
     return result
 
 
-async def do_coin_meta(client: AsyncSuiGQLClient):
+async def do_coin_meta(client: AsyncGqlClient):
     """Fetch meta data about coins, includes supply."""
     # Defaults to 0x2::sui::SUI
     handle_result(await client.execute_query_node(with_node=qn.GetCoinMetaData()))
 
 
-async def do_coins_for_type(client: AsyncSuiGQLClient):
+async def do_coins_for_type(client: AsyncGqlClient):
     """Fetch coins of specific type for owner."""
     handle_result(
         await client.execute_query_node(
             with_node=qn.GetCoins(
-                owner=client.config.active_address.address,
-                coin_type="0x2::sui::SUI",
+                owner=client.config.active_address,
+                coin_type="0x2::coin::Coin<0x2::sui::SUI>",
             )
         )
     )
 
 
-async def do_gas(client: AsyncSuiGQLClient):
+async def do_objects_for_type(client: AsyncGqlClient):
+    """Fetch objects of specific type."""
+    handle_result(
+        await client.execute_query_node(
+            with_node=qn.GetObjectsForType(
+                object_type="0x2::coin::Coin<0x2::sui::SUI>",
+            )
+        )
+    )
+
+
+async def do_gas(client: AsyncGqlClient):
     """Fetch 0x2::sui::SUI (default) for owner."""
     result = handle_result(
         await client.execute_query_node(
-            with_node=qn.GetCoins(owner=client.config.active_address.address)
+            with_node=qn.GetCoins(owner=client.config.active_address)
         )
     )
     if result.is_ok():
@@ -62,41 +81,30 @@ async def do_gas(client: AsyncSuiGQLClient):
         )
 
 
-async def do_all_gas(client: AsyncSuiGQLClient):
+async def do_all_gas(client: AsyncGqlClient):
     """Fetch all coins for owner."""
-    result = handle_result(
-        await client.execute_query_node(
-            with_node=qn.GetCoins(owner=client.config.active_address.address)
+    try:
+        # This will include all coins whether active, pruned or deleted.
+        # Change only_active to True for only active coins
+        all_coins = await async_get_all_owned_gas_objects(
+            owner=client.config.active_address, client=client, only_active=False
         )
-    )
-    tcoins = 0
-    tbalance = 0
-    while result.is_ok():
-        coins: ptypes.SuiCoinObjectsGQL = result.result_data
-        tcoins += len(coins.data)
-        tbalance += sum([int(x.balance) for x in coins.data])
-        if result.result_data.next_cursor.hasNextPage:
-            result = handle_result(
-                await client.execute_query_node(
-                    with_node=qn.GetCoins(
-                        owner=client.config.active_address.address,
-                        next_page=result.result_data.next_cursor,
-                    )
-                )
-            )
-        else:
-            break
-    print(f"Total coins: {tcoins}")
-    print(f"Total mists: {tbalance}")
+        for coin in all_coins:
+            print(coin.to_json(indent=2))
+        print(f"Total coins: {len(all_coins)}")
+        print(f"Total mists: {sum([int(x.balance) for x in all_coins])}")
+
+    except ValueError as ve:
+        raise ve
 
 
-async def do_gas_ids(client: AsyncSuiGQLClient):
+async def do_gas_ids(client: AsyncGqlClient):
     """Fetch coins by the ids."""
 
     # Use coins found for active address to use to validate
     # fetching by coin ids
     result = await client.execute_query_node(
-        with_node=qn.GetCoins(owner=client.config.active_address.address)
+        with_node=qn.GetCoins(owner=client.config.active_address)
     )
     if result.is_ok() and result.result_data.data:
         cids = [x.coin_object_id for x in result.result_data.data]
@@ -111,27 +119,27 @@ async def do_gas_ids(client: AsyncSuiGQLClient):
         print(f"Data return from call is empty {result.result_data.data}")
 
 
-async def do_sysstate(client: AsyncSuiGQLClient):
+async def do_sysstate(client: AsyncGqlClient):
     """Fetch the most current system state summary."""
     handle_result(
         await client.execute_query_node(with_node=qn.GetLatestSuiSystemState())
     )
 
 
-async def do_all_balances(client: AsyncSuiGQLClient):
+async def do_all_balances(client: AsyncGqlClient):
     """Fetch all coin types and there total balances for owner.
 
     Demonstrates paging as well
     """
     result = await client.execute_query_node(
-        with_node=qn.GetAllCoinBalances(owner=client.config.active_address.address)
+        with_node=qn.GetAllCoinBalances(owner=client.config.active_address)
     )
     handle_result(result)
     if result.is_ok():
         while result.result_data.next_cursor.hasNextPage:
             result = await client.execute_query_node(
                 with_node=qn.GetAllCoinBalances(
-                    owner=client.config.active_address.address,
+                    owner=client.config.active_address,
                     next_page=result.result_data.next_cursor,
                 )
             )
@@ -139,56 +147,80 @@ async def do_all_balances(client: AsyncSuiGQLClient):
         print("DONE")
 
 
-async def do_object(client: AsyncSuiGQLClient):
+async def do_object(client: AsyncGqlClient):
     """Fetch specific object data."""
     handle_result(
         await client.execute_query_node(with_node=qn.GetObject(object_id="0x6"))
     )
 
 
-async def do_objects(client: AsyncSuiGQLClient):
-    """Fetch all objects held by owner."""
-    handle_result(
-        await client.execute_query_node(
-            with_node=qn.GetObjectsOwnedByAddress(
-                owner=client.config.active_address.address
-            )
-        )
+async def do_object_content(client: AsyncGqlClient):
+    """Fetch minimal object content, basically just reference information.
+
+    Set 'obect_id' to object address of choice.
+    """
+    gobj = qn.GetObjectContent(
+        object_id="0x7658a888e3f2c9c4e80b6ded17f07b4f2a6621195cdd74743a815e1f526969de"
     )
+    # print(client.query_node_to_string(query_node=gobj))
+    handle_result(await client.execute_query_node(with_node=gobj))
 
 
-async def do_past_object(client: AsyncSuiGQLClient):
+async def do_objects(client: AsyncGqlClient):
+    """Fetch all objects held by owner."""
+    try:
+        objects: list = await async_get_all_owned_objects(
+            client.config.active_address, client
+        )
+        for object in objects:
+            print(object.to_json(indent=2))
+    except ValueError as ve:
+        raise ve
+
+
+async def do_past_object(client: AsyncGqlClient):
     """Fetch a past object.
     To run, change the objectID str and version int.
     """
     handle_result(
         await client.execute_query_node(
             with_node=qn.GetPastObject(
-                object_id="0xdfa764b29d303acecc801828839108ea81a45e93c3b9ccbe05b0d9a697a2a9ed",
-                version=17078252,
+                object_id="0x2803dd7600c24b4e26e9478e8f32424985c57a7e3fcdd3db7fa063cdf5d4c396",
+                version=3,
             )
         )
     )
 
 
-async def do_multiple_past_object(client: AsyncSuiGQLClient):
-    """Fetch a past object.
+async def do_multiple_object_versions(client: AsyncGqlClient):
+    """Fetchs object details by version.
     To run, change the objectID str and version int.
     """
-    past_objects = [
+    object_versions = [
         {
-            "objectId": "0xdfa764b29d303acecc801828839108ea81a45e93c3b9ccbe05b0d9a697a2a9ed",
-            "version": 17078252,
+            "address": "0x0c11bba3ea02576c30c9e627683277264a6c775bb65dbc9a6f818d91f93c6d82",
+            "version": 43,
         }
     ]
     handle_result(
         await client.execute_query_node(
-            with_node=qn.GetMultiplePastObjects(for_versions=past_objects)
+            with_node=qn.GetMultipleVersionedObjects(for_versions=object_versions)
         )
     )
 
 
-async def do_objects_for(client: AsyncSuiGQLClient):
+async def do_multiple_object_content(client: AsyncGqlClient):
+    """Fetch minimal object content, basically just reference information."""
+    gobj = qn.GetMultipleObjectContent(
+        object_ids=[
+            "0x7658a888e3f2c9c4e80b6ded17f07b4f2a6621195cdd74743a815e1f526969de"
+        ]
+    )
+    # print(client.query_node_to_string(query_node=gobj))
+    handle_result(await client.execute_query_node(with_node=gobj))
+
+
+async def do_objects_for(client: AsyncGqlClient):
     """Fetch specific objects by their ids.
 
     These are test IDs, replace to run.
@@ -197,16 +229,15 @@ async def do_objects_for(client: AsyncSuiGQLClient):
         await client.execute_query_node(
             with_node=qn.GetMultipleObjects(
                 object_ids=[
-                    "0x0847e1e02965e3f6a8b237152877a829755fd2f7cfb7da5a859f203a8d4316f0",
-                    "0x68e961e3af906b160e1ff21137304537fa6b31f5a4591ef3acf9664eb6e3cd2b",
-                    "0x77851d73e7c1227c048fc7cbf21ff9053faa872950dd33f5d0cb5b40a79d9d99",
+                    "0x2803dd7600c24b4e26e9478e8f32424985c57a7e3fcdd3db7fa063cdf5d4c396",
+                    "0x285c48a3bc7440f08ad91caf6955f8b9b8c2db69e4b4c5071aa94c2468689d93",
                 ]
             )
         )
     )
 
 
-async def do_dynamics(client: AsyncSuiGQLClient):
+async def do_dynamics(client: AsyncGqlClient):
     """Get objects dynamic field and dynamic object fields.
 
     This is test ID, replace to run.
@@ -220,7 +251,7 @@ async def do_dynamics(client: AsyncSuiGQLClient):
     )
 
 
-async def do_event(client: AsyncSuiGQLClient):
+async def do_event(client: AsyncGqlClient):
     """."""
     handle_result(
         await client.execute_query_node(
@@ -229,17 +260,17 @@ async def do_event(client: AsyncSuiGQLClient):
     )
 
 
-async def do_configs(client: AsyncSuiGQLClient):
+async def do_configs(client: AsyncGqlClient):
     """Fetch the GraphQL, Protocol and System configurations."""
     print(client.rpc_config.to_json(indent=2))
 
 
-async def do_service_config(client: AsyncSuiGQLClient):
+async def do_service_config(client: AsyncGqlClient):
     """Fetch the GraphQL, Protocol and System configurations."""
     print(client.rpc_config.serviceConfig.to_json(indent=2))
 
 
-async def do_chain_id(client: AsyncSuiGQLClient):
+async def do_chain_id(client: AsyncGqlClient):
     """Fetch the current environment chain_id.
 
     Demonstrates overriding serialization
@@ -247,7 +278,7 @@ async def do_chain_id(client: AsyncSuiGQLClient):
     print(client.chain_id)
 
 
-async def do_tx(client: AsyncSuiGQLClient):
+async def do_tx(client: AsyncGqlClient):
     """Fetch specific transaction by it's digest."""
     handle_result(
         await client.execute_query_node(
@@ -256,7 +287,7 @@ async def do_tx(client: AsyncSuiGQLClient):
     )
 
 
-async def do_txs(client: AsyncSuiGQLClient):
+async def do_txs(client: AsyncGqlClient):
     """Fetch transactions.
 
     We loop through 3 pages.
@@ -278,12 +309,12 @@ async def do_txs(client: AsyncSuiGQLClient):
         print("DONE")
 
 
-async def do_filter_txs(client: AsyncSuiGQLClient):
+async def do_filter_txs(client: AsyncGqlClient):
     """Fetch all transactions matching filter.
 
-    See Sui GraphQL schema for TransactionBlockFilter options.
+    See Sui GraphQL schema for TransactionFilter options.
     """
-    obj_filter = {"changedObject": "ENTER OBJECT_ID HERE"}
+    obj_filter = {"affectedObject": "ENTER OBJECT_ID HERE"}
     result = await client.execute_query_node(
         with_node=qn.GetFilteredTx(tx_filter=obj_filter)
     )
@@ -302,7 +333,7 @@ async def do_filter_txs(client: AsyncSuiGQLClient):
             break
 
 
-async def do_tx_kind(client: AsyncSuiGQLClient):
+async def do_tx_kind(client: AsyncGqlClient):
     """Fetch the PTB details from transaction."""
     handle_result(
         await client.execute_query_node(
@@ -311,22 +342,22 @@ async def do_tx_kind(client: AsyncSuiGQLClient):
     )
 
 
-async def do_staked_sui(client: AsyncSuiGQLClient):
+async def do_staked_sui(client: AsyncGqlClient):
     """."""
-    owner = client.config.active_address.address
+    owner = client.config.active_address
     handle_result(
         await client.execute_query_node(with_node=qn.GetDelegatedStakes(owner=owner))
     )
 
 
-async def do_latest_cp(client: AsyncSuiGQLClient):
+async def do_latest_cp(client: AsyncGqlClient):
     """."""
     qnode = qn.GetLatestCheckpointSequence()
     # print(qnode.query_as_string())
     handle_result(await client.execute_query_node(with_node=qnode))
 
 
-async def do_sequence_cp(client: AsyncSuiGQLClient):
+async def do_sequence_cp(client: AsyncGqlClient):
     """."""
     result = await client.execute_query_node(with_node=qn.GetLatestCheckpointSequence())
     if result.is_ok():
@@ -340,31 +371,17 @@ async def do_sequence_cp(client: AsyncSuiGQLClient):
         print(result.result_string)
 
 
-async def do_digest_cp(client: AsyncSuiGQLClient):
-    """."""
-    result = await client.execute_query_node(with_node=qn.GetLatestCheckpointSequence())
-    if result.is_ok():
-        cp: ptypes.CheckpointGQL = result.result_data
-        handle_result(
-            await client.execute_query_node(
-                with_node=qn.GetCheckpointByDigest(digest=cp.digest)
-            )
-        )
-    else:
-        print(result.result_string)
-
-
-async def do_checkpoints(client: AsyncSuiGQLClient):
+async def do_checkpoints(client: AsyncGqlClient):
     """."""
     handle_result(await client.execute_query_node(with_node=qn.GetCheckpoints()))
 
 
-async def do_refgas(client: AsyncSuiGQLClient):
+async def do_refgas(client: AsyncGqlClient):
     """Fetch the most current system state summary."""
     handle_result(await client.execute_query_node(with_node=qn.GetReferenceGasPrice()))
 
 
-async def do_nameservice(client: AsyncSuiGQLClient):
+async def do_nameservice(client: AsyncGqlClient):
     """Fetch the most current system state summary."""
     handle_result(
         await client.execute_query_node(
@@ -373,33 +390,61 @@ async def do_nameservice(client: AsyncSuiGQLClient):
     )
 
 
-async def do_owned_nameservice(client: AsyncSuiGQLClient):
+async def do_owned_nameservice(client: AsyncGqlClient):
     """Fetch the most current system state summary."""
     handle_result(
         await client.execute_query_node(
-            with_node=qn.GetNameServiceNames(owner=client.config.active_address.address)
+            with_node=qn.GetNameServiceNames(owner=client.config.active_address)
         )
     )
 
 
-async def do_validators_apy(client: AsyncSuiGQLClient):
-    """Fetch the most current validators apy and identity."""
-    handle_result(await client.execute_query_node(with_node=qn.GetValidatorsApy()))
+async def do_all_validators(client: AsyncGqlClient):
+    """Fetch all validators from current Epoch."""
+    result = await client.execute_query_node(with_node=qn.GetCurrentValidators())
+    while result.is_ok():
+        v_set: ptypes.ValidatorSetsGQL = result.result_data
+        print(v_set.to_json(indent=2))
+        if v_set.next_cursor.hasNextPage:
+            result = await client.execute_query_node(
+                with_node=qn.GetCurrentValidators(next_page=v_set.next_cursor)
+            )
+        else:
+            break
 
 
-async def do_validators(client: AsyncSuiGQLClient):
+async def do_validators(client: AsyncGqlClient):
     """Fetch the most current validator detail."""
     handle_result(await client.execute_query_node(with_node=qn.GetCurrentValidators()))
 
 
-async def do_protcfg(client: AsyncSuiGQLClient):
+async def do_validator_xchange_rates(client: AsyncGqlClient):
+    """Get exchange rate table entries."""
+
+    # Get list of validators
+    result = await client.execute_query_node(with_node=qn.GetCurrentValidators())
+    if result.is_ok():
+        # Extract the first validator's exchange rate object
+        v_set: ptypes.ValidatorSetsGQL = result.result_data
+        if v_set.validators:
+            vexr_addy = v_set.validators[0].exchangeRateTableAddress
+            er_results = await client.execute_query_node(
+                with_node=qn.GetValidatorExchangeRates(
+                    validator_exchange_address=vexr_addy, epoch_ids=[0, 1, 2]
+                )
+            )
+            if er_results.is_ok():
+                print(er_results.result_data.to_json(indent=2))
+
+
+async def do_protcfg(client: AsyncGqlClient):
     """Fetch the most current system state summary."""
     handle_result(
         await client.execute_query_node(with_node=qn.GetProtocolConfig(version=30))
     )
 
 
-async def do_struct(client: AsyncSuiGQLClient):
+async def do_struct(client: AsyncGqlClient):
     """Fetch structure by package::module::struct_name.
 
     This is a testnet object!!!
@@ -415,7 +460,7 @@ async def do_struct(client: AsyncSuiGQLClient):
         print(result.result_data.to_json(indent=2))
 
 
-async def do_structs(client: AsyncSuiGQLClient):
+async def do_structs(client: AsyncGqlClient):
     """Fetch structures by package::module.
 
     This is a testnet object!!!
@@ -430,7 +475,7 @@ async def do_structs(client: AsyncSuiGQLClient):
         print(result.result_data.to_json(indent=2))
 
 
-async def do_func(client: AsyncSuiGQLClient):
+async def do_func(client: AsyncGqlClient):
     """Fetch structures by package::module.
 
     This is a testnet object!!!
@@ -446,7 +491,7 @@ async def do_func(client: AsyncSuiGQLClient):
         print(result.result_data.to_json(indent=2))
 
 
-async def do_funcs(client: AsyncSuiGQLClient):
+async def do_funcs(client: AsyncGqlClient):
     """Fetch structures by package::module.
 
     This is a testnet object!!!
@@ -461,7 +506,7 @@ async def do_funcs(client: AsyncSuiGQLClient):
         print(result.result_data.to_json(indent=2))
 
 
-async def do_module(client: AsyncSuiGQLClient):
+async def do_module(client: AsyncGqlClient):
     """Fetch a module from package.
 
     This is a testnet object!!!
@@ -476,7 +521,7 @@ async def do_module(client: AsyncSuiGQLClient):
         print(result.result_data.to_json(indent=2))
 
 
-async def do_package(client: AsyncSuiGQLClient):
+async def do_package(client: AsyncGqlClient):
     """Fetch a module from package.
 
     This is a testnet object!!!
@@ -490,54 +535,84 @@ async def do_package(client: AsyncSuiGQLClient):
         print(result.result_data.to_json(indent=2))
 
 
-async def do_dry_run(client: AsyncSuiGQLClient):
+async def do_dry_run(client: AsyncGqlClient):
     """Execute a dry run."""
-    if client.chain_environment == "testnet":
-        txer = AsyncTransaction(client=AsyncClient(client.config))
-        scres = await txer.split_coin(coin=txer.gas, amounts=[1000000000])
+
+    txer: AsyncSuiTransaction = client.transaction()
+    scres = await txer.split_coin(coin=txer.gas, amounts=[1000000000])
+    await txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
+    tx_data = await txer.transaction_data()
+
+    handle_result(
+        await client.execute_query_node(
+            with_node=qn.DryRunTransaction(tx_bytestr=tx_data.serialize())
+        )
+    )
+
+
+async def do_dry_run_txkind(txer: AsyncSuiTransaction):
+    """Execute a dry run with just the TransactionKind."""
+
+    dry_run = qn.DryRunTransactionKind(
+        tx_kind=txer.raw_kind(),
+        tx_meta={"sender": txer.client.config.active_address},
+    )
+
+    handle_result(await txer.client.execute_query_node(with_node=dry_run))
+
+
+async def inspect_example(client: AsyncGqlClient):
+    """Execute a dryrun just on the TransactionKind of a transaction."""
+
+    txer: AsyncSuiTransaction = client.transaction()
+    scres = await txer.split_coin(coin=txer.gas, amounts=[1000000000])
+    await txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
+    await do_dry_run_txkind(txer)
+
+
+async def do_split_any_half(client: AsyncGqlClient):
+    """Split the 1st coin in wallet to another another equal to 1/2 in wallet.
+
+    This will only run if there is more than 1 coin in wallet.
+    """
+
+    result = await client.execute_query_node(
+        with_node=qn.GetCoins(owner=client.config.active_address)
+    )
+    if result.is_ok() and len(result.result_data.data) > 1:
+        amount = int(int(result.result_data.data[0].balance) / 2)
+        txer: AsyncSuiTransaction = client.transaction()
+        scres = await txer.split_coin(coin=result.result_data.data[0], amounts=[amount])
         await txer.transfer_objects(
             transfers=scres, recipient=client.config.active_address
         )
-
-        tx_data = await txer.get_transaction_data()
-        tx_b64 = base64.b64encode(tx_data.serialize()).decode()
         handle_result(
             await client.execute_query_node(
-                with_node=qn.DryRunTransaction(tx_bytestr=tx_b64)
+                with_node=qn.ExecuteTransaction(**await txer.build_and_sign())
             )
         )
 
 
-async def do_execute(client: AsyncSuiGQLClient):
+async def do_execute(client: AsyncGqlClient):
     """Execute a transaction."""
-    if client.chain_environment == "testnet":
-        rpc_client = AsyncClient(client.config)
-        txer = AsyncTransaction(client=rpc_client)
-        scres = await txer.split_coin(coin=txer.gas, amounts=[1000000000])
-        await txer.transfer_objects(
-            transfers=scres, recipient=client.config.active_address
+    txer: AsyncSuiTransaction = client.transaction()
+    scres = await txer.split_coin(coin=txer.gas, amounts=[1000000000])
+    await txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
+    handle_result(
+        await client.execute_query_node(
+            with_node=qn.ExecuteTransaction(**await txer.build_and_sign())
         )
-        tx_b64 = await txer.deferred_execution(run_verification=True)
-        print(tx_b64)
-        sig_array = txer.signer_block.get_signatures(client=rpc_client, tx_bytes=tx_b64)
-        rsig_array = [x.value for x in sig_array.array]
-        print(rsig_array)
-        handle_result(
-            await client.execute_query_node(
-                with_node=qn.ExecuteTransaction(tx_bytestr=tx_b64, sig_array=rsig_array)
-            )
-        )
+    )
 
 
-async def do_stake(client: AsyncSuiGQLClient):
+async def do_stake(client: AsyncGqlClient):
     """Stake some coinage.
 
     This uses a testnet validator (Blockscope.net). For different environment
     or different validator change the vaddress
     """
     vaddress = "0x44b1b319e23495995fc837dafd28fc6af8b645edddff0fc1467f1ad631362c23"
-    rpc_client = AsyncClient(client.config)
-    txer = AsyncTransaction(client=rpc_client)
+    txer: AsyncSuiTransaction = client.transaction()
 
     # Take 1 Sui from gas
     stake_coin_split = await txer.split_coin(coin=txer.gas, amounts=[1000000000])
@@ -547,73 +622,69 @@ async def do_stake(client: AsyncSuiGQLClient):
         validator_address=vaddress,
     )
     # Uncomment to dry run
-    tx_data = await txer.get_transaction_data()
-    tx_b64 = base64.b64encode(tx_data.serialize()).decode()
     handle_result(
         await client.execute_query_node(
-            with_node=qn.DryRunTransaction(tx_bytestr=tx_b64)
+            with_node=qn.DryRunTransaction(tx_bytestr=await txer.build())
         )
     )
     # Uncomment to execute the stake
-    # tx_b64 = await txer.deferred_execution(run_verification=True)
-    # print(tx_b64)
-    # sig_array = txer.signer_block.get_signatures(client=rpc_client, tx_bytes=tx_b64)
-    # rsig_array = [x.value for x in sig_array.array]
     # handle_result(
     #     await client.execute_query_node(
-    #         with_node=qn.ExecuteTransaction(tx_bytestr=tx_b64, sig_array=rsig_array)
+    #         with_node=qn.ExecuteTransaction(**await txer.build_and_sign())
     #     )
     # )
 
 
-async def do_unstake(client: AsyncSuiGQLClient):
+async def do_unstake(client: AsyncGqlClient):
     """Unstake first Staked Sui if address has any."""
 
-    owner = client.config.active_address.address
+    owner = client.config.active_address
     result = await client.execute_query_node(
         with_node=qn.GetDelegatedStakes(owner=owner)
     )
     if result.is_ok() and result.result_data.staked_coins:
-        rpc_client = AsyncClient(client.config)
-        txer = AsyncTransaction(client=rpc_client)
+        txer: AsyncSuiTransaction = client.transaction()
 
         # Unstake the first staked coin
         await txer.unstake_coin(
             staked_coin=result.result_data.staked_coins[0].object_id
         )
         # Uncomment to dry run
-        tx_data = await txer.get_transaction_data()
-        tx_b64 = base64.b64encode(tx_data.serialize()).decode()
         handle_result(
             await client.execute_query_node(
-                with_node=qn.DryRunTransaction(tx_bytestr=tx_b64)
+                with_node=qn.DryRunTransaction(tx_bytestr=await txer.build())
             )
         )
+
         # Uncomment to execute the stake
-        # tx_b64 = await txer.deferred_execution(run_verification=True)
-        # print(tx_b64)
-        # sig_array = txer.signer_block.get_signatures(client=rpc_client, tx_bytes=tx_b64)
-        # rsig_array = [x.value for x in sig_array.array]
         # handle_result(
         #     await client.execute_query_node(
-        #         with_node=qn.ExecuteTransaction(tx_bytestr=tx_b64, sig_array=rsig_array)
+        #         with_node=qn.ExecuteTransaction(**txer.build_and_sign())
         #     )
         # )
+
     else:
         print(f"No staked Sui for {owner}")
 
 
 async def main():
     """."""
-    client_init = AsyncSuiGQLClient(
-        write_schema=False,
-        config=SuiConfig.default_config(),
-    )
-    print(f"Chain environment   '{client_init.chain_environment}'")
-    print(f"Schema base version '{client_init.base_schema_version}'")
-    print(f"Schema full version '{client_init.schema_version}'")
     try:
+        client_init = AsyncGqlClient(
+            write_schema=False,
+            pysui_config=PysuiConfiguration(
+                group_name=PysuiConfiguration.SUI_GQL_RPC_GROUP,
+                profile_name="devnet",
+                # profile_name="testnet",
+                # profile_name="mainnet",
+                # persist=True,
+            ),
+        )
+        print(f"Active chain profile   '{client_init.chain_environment}'")
+        print(f"Default schema base version '{client_init.base_schema_version}'")
+        print(f"Default schema build version '{client_init.schema_version()}'")
         print()
+
         ## QueryNodes (fetch)
         # await do_coin_meta(client_init)
         # await do_coins_for_type(client_init)
@@ -623,9 +694,12 @@ async def main():
         # await do_sysstate(client_init)
         # await do_all_balances(client_init)
         # await do_object(client_init)
+        # await do_objects_for_type(client_init)
+        # await do_object_content(client_init)
         # await do_objects(client_init)
         # await do_past_object(client_init)
-        # await do_multiple_past_object(client_init)
+        # await do_multiple_object_versions(client_init)
+        # await do_multiple_object_content(client_init)
         # await do_objects_for(client_init)
         # await do_dynamics(client_init)
         # await do_event(client_init)
@@ -636,9 +710,12 @@ async def main():
         # await do_staked_sui(client_init)
         # await do_latest_cp(client_init)
         # await do_sequence_cp(client_init)
-        # await do_digest_cp(client_init)
+
         # await do_checkpoints(client_init)
         # await do_owned_nameservice(client_init)
+        # await do_all_validators(client_init)
+        # await do_validators(client_init)
+        # await do_validator_xchange_rates(client_init)
         # await do_nameservice(client_init)
         # await do_refgas(client_init)
         # await do_struct(client_init)
@@ -647,7 +724,9 @@ async def main():
         # await do_funcs(client_init)
         # await do_module(client_init)
         # await do_package(client_init)
+        # await inspect_example(client_init)
         # await do_dry_run(client_init)
+        # await do_split_any_half(client_init)
         # await do_execute(client_init)
         # await do_stake(client_init)
         # await do_unstake(client_init)
@@ -656,7 +735,6 @@ async def main():
         # await do_configs(client_init)
         # await do_service_config(client_init)
         # await do_protcfg(client_init)
-        await client_init.close()
     except ValueError as ve:
         print(ve)
 

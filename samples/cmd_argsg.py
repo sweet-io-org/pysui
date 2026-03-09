@@ -6,13 +6,9 @@
 """Argument parsing for samples/walletg."""
 
 import argparse
-from samples.cmd_arg_validators import (
-    ValidateObjectID,
-    ValidateAlias,
-    ValidateAddress,
-    ValidatePackageDir,
-    ValidateB64,
-)
+from typing import Optional
+from pysui import PysuiConfiguration
+import pysui.sui.sui_common.validators as validator
 from pysui.sui.sui_types.scalars import SuiString
 
 
@@ -58,7 +54,7 @@ def _build_read_cmds(subparser) -> None:
         "--alias",
         required=False,
         help="Alias name for new address. Optional.",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
     )
     subp.set_defaults(subcommand="new-address")
     # Gas
@@ -72,19 +68,26 @@ def _build_read_cmds(subparser) -> None:
         "--owner",
         required=False,
         help="Sui address of gas owner. Optional.",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     addy_arg_group.add_argument(
         "-a",
         "--alias",
         required=False,
         help="Alias of owner address. Optional.",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
+    )
+    addy_arg_group.add_argument(
+        "-i",
+        "--include-pruned",
+        required=False,
+        help="Include pruned and deleted results. Optional.",
+        action="store_true",
     )
     subp.set_defaults(subcommand="gas")
     # Object
     subp = subparser.add_parser("object", help="Show object by id")
-    subp.add_argument("-i", "--id", required=True, action=ValidateObjectID)
+    subp.add_argument("-i", "--id", required=True, action=validator.ValidateObjectID)
     subp.add_argument("-v", "--version", required=False, type=str)
     # subp.add_argument("-j", "--json", required=False, help="Display output as json", action="store_true")
     subp.set_defaults(subcommand="object")
@@ -99,14 +102,21 @@ def _build_read_cmds(subparser) -> None:
         "--owner",
         required=False,
         help="Sui address of objects owner. Optional.",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     addy_arg_group.add_argument(
         "-a",
         "--alias",
         required=False,
         help="Alias of owner address. Optional.",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
+    )
+    subp.add_argument(
+        "-i",
+        "--include-pruned",
+        required=False,
+        help="Include pruned and deleted results. Optional.",
+        action="store_true",
     )
     subp.add_argument(
         "-j",
@@ -130,14 +140,14 @@ def _build_transfer_cmds(subparser) -> None:
         "--transfer",
         required=True,
         help="Specify object ID of sui object being transfered",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-r",
         "--recipient",
         required=True,
         help="Specify recipient address to send object to",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     subp.add_argument(
         "-b",
@@ -151,7 +161,7 @@ def _build_transfer_cmds(subparser) -> None:
         "--gas",
         required=False,
         help="Specify sui gas object used to pay for the transaction. Optional.",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     addy_arg_group = subp.add_mutually_exclusive_group(required=False)
     addy_arg_group.add_argument(
@@ -159,14 +169,14 @@ def _build_transfer_cmds(subparser) -> None:
         "--owner",
         required=False,
         help="Sui address to send/sign with. Optional.",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     addy_arg_group.add_argument(
         "-a",
         "--alias",
         required=False,
         help="Alias of Sui owner. Optional.",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
     )
     subp.set_defaults(subcommand="transfer-object")
     # Transfer SUI
@@ -179,7 +189,7 @@ def _build_transfer_cmds(subparser) -> None:
         "--takes",
         required=True,
         help="Specify sui gas object to take mists from",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-m",
@@ -193,7 +203,7 @@ def _build_transfer_cmds(subparser) -> None:
         "--recipient",
         required=True,
         help="Specify recipient wallet address to send SUI Mists to",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     subp.add_argument(
         "-b",
@@ -207,7 +217,7 @@ def _build_transfer_cmds(subparser) -> None:
         "--gas",
         required=False,
         help="Specify sui gas object used to pay for the transaction. Optional.",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     addy_arg_group = subp.add_mutually_exclusive_group(required=False)
     addy_arg_group.add_argument(
@@ -215,14 +225,14 @@ def _build_transfer_cmds(subparser) -> None:
         "--owner",
         required=False,
         help="Sui address to send/sign with. Optional.",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     addy_arg_group.add_argument(
         "-a",
         "--alias",
         required=False,
         help="Alias of Sui owner. Optional.",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
     )
     subp.set_defaults(subcommand="transfer-sui")
 
@@ -240,7 +250,7 @@ def _build_pay_cmds(subparser) -> None:
         required=True,
         nargs="+",
         help="Specify the input coins for each <RECEIPIENT>:<AMOUNTS> to send to",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-m",
@@ -256,14 +266,14 @@ def _build_pay_cmds(subparser) -> None:
         required=True,
         nargs="+",
         help="Specify recipient address for each <AMOUNTS>:<INPUT-COINS> to send to",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     subp.add_argument(
         "-g",
         "--gas",
         required=False,
         help="Specify sui gas object used to pay for the transaction. Optional.",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-b",
@@ -278,14 +288,14 @@ def _build_pay_cmds(subparser) -> None:
         "--owner",
         required=False,
         help="Sui address to send/sign with. Optional.",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     addy_arg_group.add_argument(
         "-a",
         "--alias",
         required=False,
         help="Alias of Sui owner. Optional.",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
     )
     subp.set_defaults(subcommand="pay")
 
@@ -302,21 +312,21 @@ def _build_coin_cmds(subparser) -> None:
         "--primary-coin",
         required=True,
         help="Specify the primary coin ID to merge into",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-c",
         "--coin-to-merge",
         required=True,
         help="Specify the coin ID to merge from.",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-g",
         "--gas",
         required=False,
         help="Specify gas object to pay transaction from. Optional.",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-b",
@@ -331,14 +341,14 @@ def _build_coin_cmds(subparser) -> None:
         "--owner",
         required=False,
         help="Sui address to send/sign with. Optional.",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     addy_arg_group.add_argument(
         "-a",
         "--alias",
         required=False,
         help="Alias of Sui owner. Optional.",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
     )
     subp.set_defaults(subcommand="merge-coin")
     # Split coin
@@ -349,9 +359,9 @@ def _build_coin_cmds(subparser) -> None:
     subp.add_argument(
         "-c",
         "--coin_object_id",
-        required=True,
-        help="Specify the coin ID the split-amounts are being split from.",
-        action=ValidateObjectID,
+        required=False,
+        help="Specify the coin ID the split-amounts are being split from. Optional, wiil choose coin.",
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-m",
@@ -366,7 +376,7 @@ def _build_coin_cmds(subparser) -> None:
         "--gas",
         required=False,
         help="Specify gas object to pay transaction from. Optional.",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-b",
@@ -381,14 +391,14 @@ def _build_coin_cmds(subparser) -> None:
         "--owner",
         required=False,
         help="Sui address to send/sign with. Optional.",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     addy_arg_group.add_argument(
         "-a",
         "--alias",
         required=False,
         help="Alias of Sui owner. Optional.",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
     )
     subp.set_defaults(subcommand="split-coin")
     # Split coin
@@ -401,7 +411,7 @@ def _build_coin_cmds(subparser) -> None:
         "--coin_object_id",
         required=True,
         help="Specify the coin ID of the coin being split from.",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-s",
@@ -415,7 +425,7 @@ def _build_coin_cmds(subparser) -> None:
         "--gas",
         required=False,
         help="Specify gas object to pay transaction from. Optional.",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-b",
@@ -430,14 +440,14 @@ def _build_coin_cmds(subparser) -> None:
         "--owner",
         required=False,
         help="Sui address to send/sign with. Optional.",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     addy_arg_group.add_argument(
         "-a",
         "--alias",
         required=False,
         help="Alias of Sui owner. Optional.",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
     )
     subp.set_defaults(subcommand="split-coin-equally")
 
@@ -454,7 +464,7 @@ def _build_gql_cmds(subparser) -> None:
         "--query-file",
         required=True,
         help="The file containing the query to execute. ",
-        action=ValidatePackageDir,
+        action=validator.ValidatePackageDir,
     )
     print_group = subp.add_mutually_exclusive_group(required=False)
     print_group.add_argument(
@@ -475,83 +485,83 @@ def _build_gql_cmds(subparser) -> None:
     subp.set_defaults(subcommand="query")
 
     # Dry Run Data
-    subp = subparser.add_parser(
-        "tx-dryrun-data",
-        help="Dry run a transaction block (TransactionData).",
-    )
-    subp.add_argument(
-        "-t",
-        "--txb",
-        required=True,
-        help="The base64 transaction block data bytes.",
-        action=ValidateB64,
-    )
-    subp.set_defaults(subcommand="dryrun-data")
+    # subp = subparser.add_parser(
+    #     "tx-dryrun-data",
+    #     help="Dry run a transaction block (TransactionData).",
+    # )
+    # subp.add_argument(
+    #     "-t",
+    #     "--txb",
+    #     required=True,
+    #     help="The base64 transaction block data bytes.",
+    #     action=validator.ValidateB64,
+    # )
+    # subp.set_defaults(subcommand="dryrun-data")
 
     # Dry Run Kind
-    subp = subparser.add_parser(
-        "tx-dryrun-kind",
-        help="Dry run a transaction block kind (TransactionKind).",
-    )
-    subp.add_argument(
-        "-t",
-        "--txb",
-        required=True,
-        help="The base64 transaction block kind bytes. ",
-        action=ValidateB64,
-    )
-    subp.add_argument(
-        "--sender",
-        required=False,
-        help="Optionally set the sender's sui address",
-        action=ValidateAddress,
-    )
-    subp.add_argument(
-        "--gas-price",
-        required=False,
-        help="Optionally set the transaction gas price (in mists)",
-        type=int,
-    )
-    subp.add_argument(
-        "--gas-objects",
-        required=False,
-        nargs="+",
-        help="Optionally set the transaction gas objects to use",
-        action=ValidateObjectID,
-    )
-    subp.add_argument(
-        "--budget",
-        required=False,
-        help="Optionally set the transactions budget (in mists)",
-        type=int,
-    )
+    # subp = subparser.add_parser(
+    #     "tx-dryrun-kind",
+    #     help="Dry run a transaction block kind (TransactionKind).",
+    # )
+    # subp.add_argument(
+    #     "-t",
+    #     "--txb",
+    #     required=True,
+    #     help="The base64 transaction block kind bytes. ",
+    #     action=validator.ValidateB64,
+    # )
+    # subp.add_argument(
+    #     "--sender",
+    #     required=False,
+    #     help="Optionally set the sender's sui address",
+    #     action=validator.ValidateAddress,
+    # )
+    # subp.add_argument(
+    #     "--gas-price",
+    #     required=False,
+    #     help="Optionally set the transaction gas price (in mists)",
+    #     type=int,
+    # )
+    # subp.add_argument(
+    #     "--gas-objects",
+    #     required=False,
+    #     nargs="+",
+    #     help="Optionally set the transaction gas objects to use",
+    #     action=validator.ValidateObjectID,
+    # )
+    # subp.add_argument(
+    #     "--budget",
+    #     required=False,
+    #     help="Optionally set the transactions budget (in mists)",
+    #     type=int,
+    # )
 
-    subp.add_argument(
-        "--sponsor",
-        required=False,
-        help="Optionally set the sponsor's sui address",
-        action=ValidateAddress,
-    )
-    subp.set_defaults(subcommand="dryrun-kind")
+    # subp.add_argument(
+    #     "--sponsor",
+    #     required=False,
+    #     help="Optionally set the sponsor's sui address",
+    #     action=validator.ValidateAddress,
+    # )
+    # subp.set_defaults(subcommand="dryrun-kind")
 
     # Execute transaction
     subp = subparser.add_parser(
         "execute-signed-tx",
-        help="Dry run a transaction block (TransactionData).",
+        help="Execute a signed transaction on blockchain.",
     )
     subp.add_argument(
         "-t",
         "--txb",
         required=True,
         help="The base64 transaction block data bytes.",
-        action=ValidateB64,
+        action=validator.ValidateB64,
     )
     subp.add_argument(
         "--signatures",
         required=True,
         nargs="+",
         help="A list of Base64 encoded signatures `flag || signature || pubkey` in base64",
-        action=ValidateB64,
+        action=validator.ValidateB64,
     )
 
     subp.set_defaults(subcommand="execute-tx")
@@ -562,7 +572,11 @@ def _build_package_cmds(subparser) -> None:
     # Normalized Package
     subp = subparser.add_parser("package", help="Show normalized package information")
     subp.add_argument(
-        "-i", "--id", required=True, help="package ID", action=ValidateObjectID
+        "-i",
+        "--id",
+        required=True,
+        help="package ID",
+        action=validator.ValidateObjectID,
     )
     subp.set_defaults(subcommand="package")
     # Publish package
@@ -575,14 +589,14 @@ def _build_package_cmds(subparser) -> None:
         "--package",
         required=True,
         help="Specify the path to package folder to publish.",
-        action=ValidatePackageDir,
+        action=validator.ValidatePackageDir,
     )
     subp.add_argument(
         "-g",
         "--gas",
         required=False,
         help="Specify gas object to pay transaction from. Optional.",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-b",
@@ -597,14 +611,14 @@ def _build_package_cmds(subparser) -> None:
         "--owner",
         required=False,
         help="Sui address to send/sign with. Optional.",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     addy_arg_group.add_argument(
         "-a",
         "--alias",
         required=False,
         help="Alias of Sui owner. Optional.",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
     )
 
     subp.set_defaults(subcommand="publish")
@@ -618,7 +632,7 @@ def _build_package_cmds(subparser) -> None:
         "--package-object-id",
         required=True,
         help="Specify the package ID owner of the move module and function.",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-m",
@@ -654,7 +668,7 @@ def _build_package_cmds(subparser) -> None:
         "--gas",
         required=False,
         help="Specify gas object to pay transaction from. Optional.",
-        action=ValidateObjectID,
+        action=validator.ValidateObjectID,
     )
     subp.add_argument(
         "-b",
@@ -669,14 +683,14 @@ def _build_package_cmds(subparser) -> None:
         "--owner",
         required=False,
         help="Sui address to send/sign with. Optional.",
-        action=ValidateAddress,
+        action=validator.ValidateAddress,
     )
     addy_arg_group.add_argument(
         "-a",
         "--alias",
         required=False,
         help="Alias of Sui owner. Optional.",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
     )
     subp.set_defaults(subcommand="call")
 
@@ -719,28 +733,68 @@ def _build_aliases_cmds(subparser) -> None:
         "--existing",
         required=True,
         help="Existing alias name",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
     )
     asubp.add_argument(
         "-t",
         "--to",
         required=True,
         help="Alias to name",
-        action=ValidateAlias,
+        action=validator.ValidateAlias,
     )
     asubp.set_defaults(subcommand="rename-aliases")
 
 
-def build_parser(in_args: list) -> argparse.Namespace:
-    """Build the argument parser structure."""
-    # Base menu
+def _base_parser(
+    pconfig: PysuiConfiguration, desc: Optional[str] = None
+) -> argparse.ArgumentParser:
+    """Basic parser setting for all commands."""
     parser = argparse.ArgumentParser(
-        add_help=True, usage="%(prog)s [options] command [--command_options]"
+        add_help=True,
+        usage=desc or "%(prog)s [options] command [--command_options]",
+        description="",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "-v", "--version", help="Show pysui SDK version", action="store_true"
+        "--config",
+        dest="config_name",
+        default=pconfig.config,
+        required=False,
+        help=f"The Pysui Configuration folder to use. Default to '{pconfig.config}'",
+    )
+    parser.add_argument(
+        "--group",
+        dest="group_name",
+        choices=pconfig.group_names(),
+        default=pconfig.active_group.group_name,
+        required=False,
+        help=f"The GraphQL groups. Default to '{pconfig.active_group_name}'",
+    )
+    parser.add_argument(
+        # "-p",
+        "--profile",
+        dest="profile_name",
+        choices=pconfig.profile_names(),
+        default=pconfig.active_profile,
+        required=False,
+        help=f"The GraphQL profile node. Default to '{pconfig.active_profile}' from '{pconfig.active_group_name}'",
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        help="Sets flag to show version. Optional.",
+        action="store_true",
     )
     parser.set_defaults(subcommand="version")
+
+    return parser
+
+
+def build_parser(in_args: list, pconfig: PysuiConfiguration) -> argparse.Namespace:
+    """Build the argument parser structure."""
+    # Base menu
+    parser = _base_parser(pconfig)
+
     subparser = parser.add_subparsers(title="commands")
     _build_aliases_cmds(subparser)
     _build_read_cmds(subparser)
@@ -752,3 +806,158 @@ def build_parser(in_args: list) -> argparse.Namespace:
     _build_tx_query_commands(subparser)
 
     return parser.parse_args(in_args if in_args else ["--help"])
+
+
+def build_async_gas_parser(
+    in_args: list, pconfig: PysuiConfiguration
+) -> argparse.Namespace:
+    """Build the argument parser structure."""
+    # Base menu
+    parser = _base_parser(pconfig)
+    parser.add_help = True
+    parser.usage = "%(prog)s [options]"
+    parser.description = "Gather all gas for all objects"
+    return parser.parse_args(in_args)
+
+
+def build_smash_parser(
+    in_args: list, pconfig: PysuiConfiguration
+) -> argparse.Namespace:
+    """smash merges all of an addresses Sui coins to one."""
+    parser = _base_parser(pconfig, "smash [options].\n\n" + build_smash_parser.__doc__)
+    parser.add_argument(
+        "-i",
+        "--include",
+        nargs="+",
+        help="Includes these coins explicitly to smash together",
+        action=validator.ValidateAddress,
+    )
+    parser.add_argument(
+        "-e",
+        "--exclude",
+        nargs="+",
+        help="Exclude these coins from smash list",
+        action=validator.ValidateAddress,
+    )
+    addy_arg_group = parser.add_mutually_exclusive_group(required=False)
+    addy_arg_group.add_argument(
+        "-o",
+        "--owner",
+        help="Sui address of gas owner. Mutually exclusive with '-a/--alias",
+        action=validator.ValidateAddress,
+    )
+    addy_arg_group.add_argument(
+        "-a",
+        "--alias",
+        help="Alias of owner address.Mutually exclusive with '-o/--owner",
+        action=validator.ValidateAlias,
+    )
+    parser.add_argument(
+        "-w",
+        "--wait",
+        required=False,
+        help="Sets flag to wait for transaction commitment. Optional.",
+        action="store_true",
+    )
+
+    return parser.parse_args(in_args if in_args else ["--help"])
+
+
+def build_splay_parser(
+    in_args: list, pconfig: PysuiConfiguration
+) -> argparse.Namespace:
+    """splay spreads all, selected coins or count evenly to itself or other addresses."""
+    parser = _base_parser(pconfig, "splay [options].\n\n" + build_splay_parser.__doc__)
+    addy_arg_group = parser.add_mutually_exclusive_group(required=False)
+    addy_arg_group.add_argument(
+        "-o",
+        "--owner",
+        help="Sui address of gas owner. Mutually exclusive with '-a/--alias",
+        action=validator.ValidateAddress,
+    )
+    addy_arg_group.add_argument(
+        "-a",
+        "--alias",
+        help="Alias of owner address.Mutually exclusive with '-o/--owner",
+        action=validator.ValidateAlias,
+    )
+    parser.add_argument(
+        "-i",
+        "--include",
+        nargs="+",
+        help="Includes these coins explicitly for smashing step before splaying",
+        action=validator.ValidateAddress,
+    )
+    parser.add_argument(
+        "-e",
+        "--exclude",
+        nargs="+",
+        help="Excludes these coins from smashing step before splaying",
+        action=validator.ValidateAddress,
+    )
+
+    parser.add_argument(
+        "-m",
+        "--mist",
+        help="Amount of mist per split. Either expresses as mists `nnn` or Sui `1S`, `1s`",
+    )
+    dest_arg_group = parser.add_mutually_exclusive_group(required=False)
+    dest_arg_group.add_argument(
+        "-n",
+        "--number",
+        help="marges all or -o owner coins then splays into 'n' coins to itself. Mutually exclusive with '-r/--recipients",
+        action=validator.ValidatePositive,
+    )
+    dest_arg_group.add_argument(
+        "-r",
+        "--recipients",
+        nargs="+",
+        help="merges all or -o owner coins then splays evenly to these recipients. Mutually exclusive with '-n/--number",
+        action=validator.ValidateAddress,
+    )
+    parser.add_argument(
+        "-b",
+        "--budget",
+        required=False,
+        default=10_000_000,
+        help="Budget reserved to execute splay. Optional - defaults to 10_000_000 mists.",
+        action=validator.ValidatePositive,
+    )
+    parser.add_argument(
+        "-w",
+        "--wait",
+        required=False,
+        help="Sets flag to wait for transaction commitment. Optional.",
+        action="store_true",
+    )
+    return parser.parse_args(in_args if in_args else ["--help"])
+
+
+def _group_pull(cli_arg: list, config: PysuiConfiguration) -> list:
+    """Check for group and set accordingly."""
+
+    if cli_arg.count("--group"):
+        ndx = cli_arg.index("--group")
+        nvl: str = cli_arg[ndx + 1]
+        config.make_active(group_name=nvl)
+        cli_arg = [n for n in cli_arg if n not in [cli_arg[ndx], cli_arg[ndx + 1]]]
+
+    return cli_arg
+
+
+def pre_config_pull(cli_arg: list) -> tuple[PysuiConfiguration, list]:
+    """Check for a configuration path to use."""
+    cfg = None
+    removals: list = []
+    if cli_arg.count("--config"):
+        ndx = cli_arg.index("--config")
+        nvl: str = cli_arg[ndx + 1]
+        cfg = PysuiConfiguration(from_cfg_path=nvl)
+        removals.append(cli_arg[ndx])
+        removals.append(cli_arg[ndx + 1])
+        cli_arg = _group_pull(cli_arg, cfg)
+        cli_arg = [n for n in cli_arg if n not in removals]
+    else:
+        cfg = PysuiConfiguration(group_name=PysuiConfiguration.SUI_GQL_RPC_GROUP)
+
+    return cfg, cli_arg

@@ -8,6 +8,7 @@
 
 import os
 import sys
+import unittest.mock as mock
 
 sys.path.insert(0, os.path.abspath("../.."))
 sys.path.insert(0, os.path.abspath("../../pysui"))

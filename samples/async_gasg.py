@@ -18,11 +18,6 @@ Shows:
 * Loading an asynchronous client (see `main`)
 * Fetching all address owned object descriptors from Sui blockchain
 * Fetching all address owned gas objects for each address from Sui blockchain
-* Note that there are new SUI RPC API that can simplify this further and pysui has
-* builders for them. See pysui/sui/sui_builders/get_builders.py:
-*   GetCoinMetaData
-*   GetCoinTypeBalance
-*   GetCoins
 """
 
 import asyncio
@@ -31,7 +26,6 @@ import pathlib
 import sys
 import json
 
-
 PROJECT_DIR = pathlib.Path(os.path.dirname(__file__))
 PARENT = PROJECT_DIR.parent
 
@@ -39,56 +33,27 @@ sys.path.insert(0, str(PROJECT_DIR))
 sys.path.insert(0, str(PARENT))
 sys.path.insert(0, str(os.path.join(PARENT, "pysui")))
 
-from pysui import SuiConfig, SuiAddress
-from pysui.sui.sui_constants import SUI_COIN_DENOMINATOR
-from pysui.sui.sui_pgql.pgql_clients import AsyncSuiGQLClient
-import pysui.sui.sui_pgql.pgql_query as qn
-import pysui.sui.sui_pgql.pgql_types as pgql_type
+_async_gas_version = "1.1.1"
+from pysui.sui.sui_pgql.pgql_utils import async_get_all_owned_gas_objects
+from samples.cmd_argsg import build_async_gas_parser, pre_config_pull
 
-from pysui.sui.sui_txresults.single_tx import (
-    ObjectReadPage,
-    SuiCoinObjects,
-    SuiGas,
-)
+
+from pysui import PysuiConfiguration, AsyncGqlClient, __version__
+from pysui.sui.sui_constants import SUI_COIN_DENOMINATOR
+import pysui.sui.sui_pgql.pgql_types as pgql_type
 
 
 async def _get_all_gas_objects(
-    client: AsyncSuiGQLClient, address_id: str
+    client: AsyncGqlClient, address_id: str
 ) -> list[pgql_type.SuiCoinObjectGQL]:
     """Retreive all Gas Objects."""
-    coin_list: list[pgql_type.SuiCoinObjectGQL] = []
-    result = await client.execute_query_node(with_node=qn.GetCoins(owner=address_id))
-    while True:
-        if result.is_ok():
-            coin_list.extend(result.result_data.data)
-            if result.result_data.next_cursor.hasNextPage:
-                result = await client.execute_query_node(
-                    with_node=qn.GetCoins(
-                        owner=address_id, next_page=result.result_data.next_cursor
-                    )
-                )
-            else:
-                break
-        else:
-            raise ValueError(f"Execute query error: {result.result_string}")
-    return coin_list
+    try:
+        return await async_get_all_owned_gas_objects(address_id, client)
+    except ValueError as ve:
+        raise ve
 
 
-def object_stats(objs: list[ObjectReadPage]) -> None:
-    """object_stats Print stats about objects for address.
-
-    :param objs: List of object descriptors
-    :type objs: list[ObjectInfo]
-    """
-    obj_types = {}
-    for desc in objs.data:
-        if desc.object_type not in obj_types:
-            obj_types[desc.object_type] = 0
-        obj_types[desc.object_type] = obj_types[desc.object_type] + 1
-    print(f"owned types and counts:\n{json.dumps(obj_types,indent=2)}")
-
-
-def print_gas(gasses: SuiCoinObjects) -> int:
+def print_gas(gasses: list[pgql_type.SuiCoinObjectGQL]) -> int:
     """print_gas Prints gas balances for each gas object `gasses`.
 
     :param gasses: A list of SuiGas type objects
@@ -97,26 +62,31 @@ def print_gas(gasses: SuiCoinObjects) -> int:
     :rtype: int
     """
     total: int = 0
-    for gas_result in gasses:
-        total += int(gas_result.balance)
-        print(
-            f"{gas_result.coin_object_id} has {int(gas_result.balance):12} -> {int(gas_result.balance)/SUI_COIN_DENOMINATOR:.8f}"
-        )
-    print(f"Total gas {total:12} -> {total/SUI_COIN_DENOMINATOR:.8f}")
-    print()
+    try:
+        for gas_result in gasses:
+            total += int(gas_result.balance)
+            print(
+                f"{gas_result.coin_object_id} has {int(gas_result.balance):12} -> {int(gas_result.balance)/SUI_COIN_DENOMINATOR:.8f}"
+            )
+        print(f"Total gas {total:12} -> {total/SUI_COIN_DENOMINATOR:.8f}")
+        print()
+    except TypeError:
+        total = 0
+
     return total
 
 
-async def get_all_gas(client: AsyncSuiGQLClient) -> dict[SuiAddress, list[SuiGas]]:
+async def get_all_gas(
+    client: AsyncGqlClient,
+) -> dict[str, list[pgql_type.SuiCoinObjectGQL]]:
     """get_all_gas Gets all SuiGas for each address in configuration.
 
     :param client: Asynchronous Sui Client
-    :type client: SuiAsynchClient
+    :type client: AsyncSuiGQLClient
     :return: Dictionary of all gas objects for each address
-    :rtype: dict[SuiAddress, list[SuiGas]]
+    :rtype: dict[str, list[SuiGas]]
     """
-    config: SuiConfig = client.config
-    addys = [x for x in config.addresses]
+    addys = [x for x in client.config.model.active_group.address_list]
 
     addy_list = [_get_all_gas_objects(client, x) for x in addys]
     gresult = await asyncio.gather(*addy_list, return_exceptions=True)
@@ -126,14 +96,9 @@ async def get_all_gas(client: AsyncSuiGQLClient) -> dict[SuiAddress, list[SuiGas
     return return_map
 
 
-async def main_run(client: AsyncSuiGQLClient):
+async def main_run(client: AsyncGqlClient):
     """Main Asynchronous entry point."""
-    config: SuiConfig = client.config
-    # owned_objects = asyncio.create_task(client.get_objects())
     gasses = asyncio.create_task(get_all_gas(client))
-    # print(f"Getting owned objects for: {config.active_address}")
-    # result = await owned_objects
-    # object_stats(result.result_data)
     result = await gasses
     grand_total: int = 0
     for key, value in result.items():
@@ -147,15 +112,24 @@ async def main_run(client: AsyncSuiGQLClient):
     await client.close()
 
 
+def sdk_version():
+    """Dispay version(s)."""
+    print(f"async_gas_version: {_async_gas_version} SDK version: {__version__}")
+
+
 def main():
     """Setup asynch loop and run."""
-    arg_line = sys.argv[1:].copy()
     # Handle a different client.yaml than default
-    if arg_line and arg_line[0] == "--local":
-        cfg = SuiConfig.sui_base_config()
-    else:
-        cfg = SuiConfig.default_config()
-    arpc = AsyncSuiGQLClient(config=cfg)
+    cfg, arg_line = pre_config_pull(sys.argv[1:].copy())
+    parsed = build_async_gas_parser(arg_line, cfg)
+
+    cfg.make_active(
+        group_name=parsed.group_name, profile_name=parsed.profile_name, persist=False
+    )
+    if parsed.version:
+        sdk_version()
+        return
+    arpc = AsyncGqlClient(pysui_config=cfg)
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)

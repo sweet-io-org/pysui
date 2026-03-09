@@ -6,125 +6,24 @@
 """Pysui Transaction builder that leverages Sui GraphQL."""
 
 import base64
-from typing import Any, Callable, Optional, Union
 from functools import cache
-from pysui.sui.sui_pgql.pgql_txb_signing import SignerBlock
-from pysui.sui.sui_txn.transaction import _SuiTransactionBase
-from pysui.sui.sui_types import bcs
+import inspect
+from typing import Any, Callable, Optional, Union
+
+from deprecated.sphinx import versionchanged, versionadded, deprecated
+from pysui.sui.sui_common.trxn_base import _SuiTransactionBase as txbase
+
+from pysui.sui.sui_bcs import bcs
 from pysui.sui.sui_txn.transaction_builder import PureInput
 import pysui.sui.sui_pgql.pgql_txb_gas as gd
 import pysui.sui.sui_pgql.pgql_validators as tv
 import pysui.sui.sui_pgql.pgql_query as qn
 import pysui.sui.sui_pgql.pgql_types as pgql_type
-import pysui.sui.sui_pgql.pgql_txn_argb as ab
-from pysui.sui.sui_types.scalars import SuiU64
-
-# Well known parameter constructs
-
-_SPLIT_COIN = pgql_type.MoveArgSummary(
-    [],
-    [
-        pgql_type.MoveObjectRefArg(
-            pgql_type.RefType.MUT_REF, "0x2", "sui", "SUI", [], False, False, False
-        ),
-        pgql_type.MoveListArg(
-            pgql_type.RefType.NO_REF,
-            pgql_type.MoveScalarArg(pgql_type.RefType.NO_REF, "u64"),
-        ),
-    ],
-)
-
-_MERGE_COINS = pgql_type.MoveArgSummary(
-    [],
-    [
-        pgql_type.MoveObjectRefArg(
-            pgql_type.RefType.MUT_REF, "0x2", "sui", "SUI", [], False, False, False
-        ),
-        pgql_type.MoveListArg(
-            pgql_type.RefType.NO_REF,
-            pgql_type.MoveObjectRefArg(
-                pgql_type.RefType.MUT_REF, "0x2", "sui", "SUI", [], False, False, False
-            ),
-        ),
-    ],
-)
-
-_TRANSFER_OBJECTS = pgql_type.MoveArgSummary(
-    [],
-    [
-        pgql_type.MoveScalarArg(pgql_type.RefType.NO_REF, "address"),
-        pgql_type.MoveListArg(
-            pgql_type.RefType.NO_REF,
-            pgql_type.MoveObjectRefArg(
-                pgql_type.RefType.MUT_REF, "0x2", "sui", "SUI", [], False, False, False
-            ),
-        ),
-    ],
-)
-
-_TRANSFER_SUI = pgql_type.MoveArgSummary(
-    [],
-    [
-        pgql_type.MoveScalarArg(pgql_type.RefType.NO_REF, "address"),
-        pgql_type.MoveObjectRefArg(
-            pgql_type.RefType.MUT_REF, "0x2", "sui", "SUI", [], False, False, False
-        ),
-        pgql_type.MoveObjectRefArg(
-            pgql_type.RefType.MUT_REF,
-            "0x2",
-            "sui",
-            "SUI",
-            [pgql_type.MoveScalarArg(pgql_type.RefType.NO_REF, "u64")],
-            True,
-            False,
-            False,
-        ),
-    ],
-)
-
-_PUBLIC_TRANSFER_OBJECTS = pgql_type.MoveArgSummary(
-    [],
-    [
-        pgql_type.MoveObjectRefArg(
-            pgql_type.RefType.MUT_REF, "0x2", "sui", "SUI", [], False, False, False
-        ),
-        pgql_type.MoveScalarArg(pgql_type.RefType.NO_REF, "address"),
-    ],
-)
-
-_MAKE_MOVE_VEC = pgql_type.MoveArgSummary(
-    [],
-    [
-        pgql_type.MoveVectorArg(
-            pgql_type.RefType.NO_REF,
-            pgql_type.MoveObjectRefArg(
-                pgql_type.RefType.MUT_REF, "0x2", "sui", "SUI", [], False, False, False
-            ),
-        )
-    ],
-)
-
-_PUBLISH_UPGRADE = pgql_type.MoveArgSummary(
-    [],
-    [
-        pgql_type.MoveObjectRefArg(
-            pgql_type.RefType.MUT_REF, "0x2", "sui", "SUI", [], False, False, False
-        ),
-        pgql_type.MoveScalarArg(pgql_type.RefType.NO_REF, "u8"),
-    ],
-)
+import pysui.sui.sui_pgql.pgql_txn_argb as argbase
 
 
-class SuiTransaction(_SuiTransactionBase):
+class SuiTransaction(txbase):
     """."""
-
-    # Prebuild functions
-
-    _STAKE_REQUEST_TUPLE: tuple = None
-    _UNSTAKE_REQUEST_TUPLE: tuple = None
-    _SPLIT_AND_KEEP_TUPLE: tuple = None
-    _SPLIT_AND_RETURN_TUPLE: tuple = None
-    _PUBLISH_AUTHORIZE_UPGRADE_TUPLE: tuple = None
 
     def __init__(
         self,
@@ -140,23 +39,24 @@ class SuiTransaction(_SuiTransactionBase):
         :type compress_inputs: bool,optional
         :param merge_gas_budget: If True will take available gas not in use for paying for transaction, defaults to False
         :type merge_gas_budget: bool, optional
-        :param deserialize_from: Will rehydrate SuiTransaction state from serialized base64 str or bytes, defaults to None
-        :type deserialize_from: Union[str, bytes], optional
         """
-        super().__init__(**kwargs)
-        # Force new signer block
-        self._sig_block = SignerBlock(
-            sender=kwargs.get(
-                "initial_sender", self.client.config.active_address.address
-            )
-        )
-        # Preload
-        self._STAKE_REQUEST_TUPLE = self._function_meta_args(self._STAKE_REQUEST_TARGET)
-        self._UNSTAKE_REQUEST_TUPLE = self._function_meta_args(
-            self._UNSTAKE_REQUEST_TARGET
-        )
-        self._SPLIT_AND_KEEP_TUPLE = self._function_meta_args(self._SPLIT_AND_KEEP)
-        self._SPLIT_AND_RETURN_TUPLE = self._function_meta_args(self._SPLIT_AND_RETURN)
+        frame = inspect.currentframe()
+
+        try:
+            caller = frame.f_back
+            if (
+                caller.f_code.co_filename.endswith("pgql_clients.py")
+                and caller.f_code.co_name == "transaction"
+            ):
+                super().__init__(**kwargs)
+                self._argparse = argbase.ResolvingArgParser(self.client)
+            else:
+                raise ValueError(
+                    "SuiTransaction must be created from SyncGqlClient.transaction(). "
+                    + f"Correct code in {caller.f_code.co_filename} around {caller.f_code.co_firstlineno}"
+                )
+        finally:
+            del frame
 
     @cache
     def _function_meta_args(
@@ -190,10 +90,17 @@ class SuiTransaction(_SuiTransactionBase):
             )
         raise ValueError(f"Unresolvable target {target}")
 
+    def target_function_summary(
+        self, target: str
+    ) -> tuple[bcs.Address, str, str, int, pgql_type.MoveArgSummary]:
+        """Returns the argument summary of a target sui move function."""
+        return self._function_meta_args(target)
+
     def _build_txn_data(
         self,
         gas_budget: str = "",
         use_gas_objects: Optional[list[Union[str, pgql_type.SuiCoinObjectGQL]]] = None,
+        txn_expires_after: Optional[int] = None,
     ) -> Union[bcs.TransactionData, ValueError]:
         """Generate the TransactionData structure."""
         obj_in_use: set[str] = set(self.builder.objects_registry.keys())
@@ -213,7 +120,11 @@ class SuiTransaction(_SuiTransactionBase):
                 tx_kind,
                 bcs.Address.from_str(self.signer_block.sender_str),
                 gas_data,
-                bcs.TransactionExpiration("None"),
+                bcs.TransactionExpiration(
+                    "None"
+                    if not txn_expires_after
+                    else bcs.TransactionExpiration("Epoch", txn_expires_after)
+                ),
             ),
         )
 
@@ -222,6 +133,7 @@ class SuiTransaction(_SuiTransactionBase):
         *,
         gas_budget: Optional[str] = None,
         use_gas_objects: Optional[list[Union[str, pgql_type.SuiCoinObjectGQL]]] = None,
+        txn_expires_after: Optional[int] = None,
     ) -> bcs.TransactionData:
         """transaction_data Construct a BCS TransactionData object.
 
@@ -234,16 +146,19 @@ class SuiTransaction(_SuiTransactionBase):
         :type gas_budget: Optional[str], optional
         :param use_gas_objects: Specify gas object(s) (by ID or SuiCoinObjectGQL), defaults to None
         :type use_gas_objects: Optional[list[Union[str, pgql_type.SuiCoinObjectGQL]]], optional
+        :param txn_expires_after: Specify the transaction expiration epoch ID, defaults to None
+        :type txn_expires_after: Optional[int],optional
         :return: The TransactionData BCS structure
         :rtype: bcs.TransactionData
         """
-        return self._build_txn_data(gas_budget, use_gas_objects)
+        return self._build_txn_data(gas_budget, use_gas_objects, txn_expires_after)
 
     def build(
         self,
         *,
         gas_budget: Optional[str] = None,
         use_gas_objects: Optional[list[Union[str, pgql_type.SuiCoinObjectGQL]]] = None,
+        txn_expires_after: Optional[int] = None,
     ) -> str:
         """build After creating the BCS TransactionData, serialize to base64 string and return.
 
@@ -251,36 +166,52 @@ class SuiTransaction(_SuiTransactionBase):
         :type gas_budget: Optional[str], optional
         :param use_gas_objects: Specify gas object(s) (by ID or SuiCoinObjectGQL), defaults to None
         :type use_gas_objects: Optional[list[Union[str, pgql_type.SuiCoinObjectGQL]]], optional
+        :param txn_expires_after: Specify the transaction expiration epoch ID, defaults to None
+        :type txn_expires_after: Optional[int],optional
         :return: Base64 encoded transaction bytes
         :rtype: str
         """
         txn_data = self.transaction_data(
-            gas_budget=gas_budget, use_gas_objects=use_gas_objects
+            gas_budget=gas_budget,
+            use_gas_objects=use_gas_objects,
+            txn_expires_after=txn_expires_after,
         )
         return base64.b64encode(txn_data.serialize()).decode()
 
+    @versionchanged(version="0.64.0", reason="Return dict instead of tuple")
     def build_and_sign(
         self,
         *,
         gas_budget: Optional[str] = None,
         use_gas_objects: Optional[list[Union[str, pgql_type.SuiCoinObjectGQL]]] = None,
-    ) -> tuple[str, list[str]]:
+        txn_expires_after: Optional[int] = None,
+    ) -> dict:
         """build After creating the BCS TransactionKind, serialize to base64 string, create signatures and return.
 
         :param gas_budget: Specify the amount of gas for the transaction budget, defaults to None
         :type gas_budget: Optional[str], optional
         :param use_gas_objects: Specify gas object(s) (by ID or SuiCoinObjectGQL), defaults to None
         :type use_gas_objects: Optional[list[Union[str, pgql_type.SuiCoinObjectGQL]]], optional
-        :return: Tuple of tx_bytes (base64) and list of signatures
-        :rtype: tuple[str, list[str]]
+        :param txn_expires_after: Specify the transaction expiration epoch ID, defaults to None
+        :type txn_expires_after: Optional[int],optional
+        :return: Dict of
+            {
+                "tx_bytestr": base64 encoded transaction bytes,
+                "sig_array": array of base64 encoded signature bytes
+
+            }
+        :rtype: dict[str, str]
         """
         txn_kind = self.transaction_data(
-            gas_budget=gas_budget, use_gas_objects=use_gas_objects
+            gas_budget=gas_budget,
+            use_gas_objects=use_gas_objects,
+            txn_expires_after=txn_expires_after,
         )
         tx_bytes = base64.b64encode(txn_kind.serialize()).decode()
-        sig_block: SignerBlock = self.signer_block
-        sigs = sig_block.get_signatures(config=self.client.config, tx_bytes=tx_bytes)
-        return tx_bytes, sigs
+        sigs = self.signer_block.get_signatures(
+            config=self.client.config, tx_bytes=tx_bytes
+        )
+        return {self._BUILD_BYTE_STR: tx_bytes, self._SIG_ARRAY: sigs}
 
     def split_coin(
         self,
@@ -298,7 +229,7 @@ class SuiTransaction(_SuiTransactionBase):
         .. code-block:: python
 
             # Transfer all coins to one recipient
-            txer = SuiTransaction(client)
+            txer = client.transaction()
             scres = txer.split_coin(coin=primary_coin, amounts=[1000000000, 1000000000])
             txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
 
@@ -313,7 +244,7 @@ class SuiTransaction(_SuiTransactionBase):
         :rtype: Union[list[bcs.Argument],bcs.Argument]
         """
 
-        parms = ab.build_args(self.client, [coin, amounts], _SPLIT_COIN)
+        parms = self._argparse.build_args([coin, amounts], txbase._SPLIT_COIN)
         return self.builder.split_coin(parms[0], parms[1:][0])
 
     def merge_coins(
@@ -331,7 +262,7 @@ class SuiTransaction(_SuiTransactionBase):
         :return: The command result. Can not be used as input in subsequent commands.
         :rtype: bcs.Argument
         """
-        parms = ab.build_args(self.client, [merge_to, merge_from], _MERGE_COINS)
+        parms = self._argparse.build_args([merge_to, merge_from], txbase._MERGE_COINS)
         return self.builder.merge_coins(parms[0], parms[1:][0])
 
     def split_coin_equal(
@@ -354,10 +285,10 @@ class SuiTransaction(_SuiTransactionBase):
         :rtype: bcs.Argument
         """
         package, package_module, package_function, retcount, ars = (
-            self._SPLIT_AND_KEEP_TUPLE
+            self._function_meta_args(self._SPLIT_AND_KEEP)
         )
 
-        parms = ab.build_args(self.client, [coin, split_count], ars)
+        parms = self._argparse.build_args([coin, split_count], ars)
         type_arguments = [bcs.TypeTag.type_tag_from(coin_type)]
         return self.builder.move_call(
             target=package,
@@ -368,22 +299,25 @@ class SuiTransaction(_SuiTransactionBase):
             res_count=retcount,
         )
 
+    @versionchanged(version="0.72.0", reason="Support recipient passed as Argument")
     def transfer_objects(
         self,
         *,
         transfers: list[Union[str, pgql_type.ObjectReadGQL, bcs.Argument]],
-        recipient: str,
+        recipient: Union[str, bcs.Argument],
     ) -> bcs.Argument:
         """transfer_objects Transfers one or more objects to a recipient.
 
         :param transfers: A list or SuiArray of objects to transfer
         :type transfers: list[Union[str, pgql_type.ObjectReadGQL, bcs.Argument]]
         :param recipient: The recipient address that will receive the objects being transfered
-        :type recipient: str
+        :type recipient: Union[str, bcs.Argument]
         :return: The command result. Can NOT be used as input in subsequent commands.
         :rtype: bcs.Argument
         """
-        parms = ab.build_args(self.client, [recipient, transfers], _TRANSFER_OBJECTS)
+        parms = self._argparse.build_args(
+            [recipient, transfers], txbase._TRANSFER_OBJECTS
+        )
         return self.builder.transfer_objects(parms[0], parms[1:][0])
 
     def transfer_sui(
@@ -407,7 +341,9 @@ class SuiTransaction(_SuiTransactionBase):
         :rtype: bcs.Argument
         """
         return self.builder.transfer_sui(
-            *ab.build_args(self.client, [recipient, from_coin, amount], _TRANSFER_SUI)
+            *self._argparse.build_args(
+                [recipient, from_coin, amount], txbase._TRANSFER_SUI
+            )
         )
 
     def public_transfer_object(
@@ -432,11 +368,13 @@ class SuiTransaction(_SuiTransactionBase):
             tv.TypeValidator.check_target_triplet(self._PUBLIC_TRANSFER)
         )
         package = bcs.Address.from_str(package)
-
+        # parms = self._argparse.build_args(
+        #     [object_to_send, recipient], txbase._PUBLIC_TRANSFER_OBJECTS
+        # )
         return self.builder.move_call(
             target=package,
-            arguments=ab.build_args(
-                self.client, [object_to_send, recipient], _PUBLIC_TRANSFER_OBJECTS
+            arguments=self._argparse.build_args(
+                [object_to_send, recipient], txbase._PUBLIC_TRANSFER_OBJECTS
             ),
             type_arguments=[bcs.TypeTag.type_tag_from(object_type)],
             module=package_module,
@@ -457,8 +395,8 @@ class SuiTransaction(_SuiTransactionBase):
             else:
                 type_tag = bcs.OptionalTypeTag()
             return self.builder.make_move_vector(type_tag, items)
-
-        parms = ab.build_args(self.client, [items], _MAKE_MOVE_VEC)
+        parms = self._argparse.build_args([items], txbase._MAKE_MOVE_VEC)
+        # parms = ab.build_args(self.client, [items], txbase._MAKE_MOVE_VEC)
         if item_type:
             type_tag = bcs.OptionalTypeTag(bcs.TypeTag.type_tag_from(item_type))
         else:
@@ -490,8 +428,9 @@ class SuiTransaction(_SuiTransactionBase):
         package, package_module, package_function, retcount, ars = (
             self._function_meta_args(target)
         )
+
         type_arguments = [bcs.TypeTag.type_tag_from(x) for x in type_arguments]
-        parms = ab.build_args(self.client, arguments, ars)
+        parms = self._argparse.build_args(arguments, ars)
         return self.builder.move_call(
             target=package,
             arguments=parms,
@@ -499,6 +438,52 @@ class SuiTransaction(_SuiTransactionBase):
             module=package_module,
             function=package_function,
             res_count=retcount,
+        )
+
+    def optional_object(
+        self,
+        *,
+        optional_object: Union[None, str, pgql_type.ObjectReadGQL, bcs.Argument],
+        is_receiving: Optional[bool] = False,
+        is_shared_mutable: Optional[bool] = False,
+        type_arguments: Optional[list] = None,
+    ) -> bcs.Argument:
+        """optional_object Creations and option::some wrapper around object.
+
+        :param optional_object: target object to make option from
+        :type optional_object: Union[None,str, pgql_type.ObjectReadGQL, bcs.Argument]
+        :param is_receiving: If not a shared object, indicates if it is a Receiving type
+        :type is_receiving: bool
+        :param is_shared_mutable: If object is shared, indicates if should be mutable
+        :type is_shared_mutable: bool
+        :param type_arguments: The type of object being wrapped, defaults to None
+        :type type_arguments: Optional[list], optional
+        :return: A non-empty object result Argument
+        :rtype: bcs.Argument
+        """
+        type_arguments = type_arguments if type_arguments else []
+        function = "some"
+        # Handle other than argument
+        if isinstance(optional_object, bcs.Argument):
+            parms = [optional_object]
+        elif isinstance(optional_object, (str, pgql_type.ObjectReadGQL)):
+            parms = [
+                self._argparse.fetch_or_transpose_object(
+                    optional_object, is_receiving, is_shared_mutable
+                )
+            ]
+        elif not optional_object:
+            function = "none"
+            parms = []
+        type_arguments = [bcs.TypeTag.type_tag_from(x) for x in type_arguments]
+
+        return self.builder.move_call(
+            target=self._STD_FRAMEWORK,
+            arguments=parms,
+            type_arguments=type_arguments,
+            module="option",
+            function=function,
+            res_count=1,
         )
 
     def stake_coin(
@@ -521,14 +506,18 @@ class SuiTransaction(_SuiTransactionBase):
         """
         # Fetch pre-build meta arg summary
         package, package_module, package_function, retcount, ars = (
-            self._STAKE_REQUEST_TUPLE
+            self._function_meta_args(self._STAKE_REQUEST_TARGET)
         )
+
         # Validate arguments
-        parms = ab.build_args(
-            self.client,
-            [self._SYSTEMSTATE_OBJECT.value, coins, amount, validator_address],
-            ars,
+        parms = self._argparse.build_args(
+            [self._SYSTEMSTATE_OBJECT.value, coins, amount, validator_address], ars
         )
+        # parms = ab.build_args(
+        #     self.client,
+        #     [self._SYSTEMSTATE_OBJECT.value, coins, amount, validator_address],
+        #     ars,
+        # )
         # Create a move vector of coins
         parms[1] = self.make_move_vector(
             items=parms[1], item_type="0x2::coin::Coin<0x2::sui::SUI>"
@@ -555,17 +544,26 @@ class SuiTransaction(_SuiTransactionBase):
         """
         # Fetch pre-build meta arg summary
         package, package_module, package_function, retcount, ars = (
-            self._UNSTAKE_REQUEST_TUPLE
+            self._function_meta_args(self._UNSTAKE_REQUEST_TARGET)
         )
+
         # Validate arguments
-        parms = ab.build_args(
-            self.client,
+        parms = self._argparse.build_args(
             [
                 self._SYSTEMSTATE_OBJECT.value,
                 staked_coin,
             ],
             ars,
         )
+
+        # parms = ab.build_args(
+        #     self.client,
+        #     [
+        #         self._SYSTEMSTATE_OBJECT.value,
+        #         staked_coin,
+        #     ],
+        #     ars,
+        # )
         return self.builder.move_call(
             target=package,
             arguments=parms,
@@ -588,6 +586,14 @@ class SuiTransaction(_SuiTransactionBase):
         :rtype: bcs.Argument
         """
         modules, dependencies, _digest = self._compile_source(project_path, args_list)
+        # u8_modules: list[list[int]] = []
+        # for mods in modules:
+        #     # u8_modules.append(list(mods[0]))
+        #     nmod: list[bcs.U8] = None
+        #     u8_modules.append([bcs.U8.int_unsafe(x) for x in mods])
+        # for i in mods:
+        #     u8_modules.append([bcs.U8.int_unsafe(x) for x in i])
+
         return self.builder.publish(modules, dependencies)
 
     def publish_from_bytecode(
@@ -652,28 +658,24 @@ class SuiTransaction(_SuiTransactionBase):
             and package_struct == "UpgradeCap"
         ):
             # Prep args
-            cap_obj_arg, policy_arg = ab.build_args(
-                self.client,
+            cap_obj_arg, policy_arg = self._argparse.build_args(
                 [upgrade_cap, upgrade_cap.content["policy"]],
-                _PUBLISH_UPGRADE,
+                txbase._PUBLISH_UPGRADE,
             )
+
             # Capture input offsets to preserve location of upgrade_cap ObjectArg
             cap_arg = len(self.builder.inputs)
             # Authorize, publish and commit the upgrade
+            auth_cmd = self.builder.authorize_upgrade(
+                cap_obj_arg, policy_arg, PureInput.as_input(digest)
+            )
             return self.builder.commit_upgrade(
                 bcs.Argument("Input", cap_arg),
                 self.builder.publish_upgrade(
                     modules,
                     dependencies,
                     bcs.Address.from_str(upgrade_cap.content["package"]),
-                    self.builder.authorize_upgrade(
-                        *ab.build_args(
-                            self.client,
-                            [upgrade_cap, upgrade_cap.content["policy"]],
-                            _PUBLISH_UPGRADE,
-                        ),
-                        PureInput.as_input(digest),
-                    ),
+                    auth_cmd,
                 ),
             )
         else:

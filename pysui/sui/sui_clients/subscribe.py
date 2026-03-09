@@ -20,7 +20,7 @@ import json
 import inspect
 from typing import Any, Callable, Optional, Union
 import warnings
-from deprecated.sphinx import versionadded, versionchanged
+from deprecated.sphinx import versionadded, versionchanged, deprecated
 from websockets.client import connect as ws_connect
 from websockets.exceptions import ConnectionClosed, ConnectionClosedError
 from websockets.client import WebSocketClientProtocol
@@ -69,6 +69,7 @@ class EventData:
         return self._name
 
 
+@deprecated(version="0.65.0", reason="Sui dropping JSON RPC subscriptions.")
 class SuiClient(Provider):
     """A provider for managing subscriptions of Events or Transactions."""
 
@@ -228,10 +229,18 @@ class SuiClient(Provider):
         if self.config.socket_url.startswith("wss:"):
             logger.info("Subscription listener Connecting with SSLContext")
             warnings.simplefilter("ignore")
+
+            # Use the most secure SSL protocol available
+            # PROTOCOL_TLS_CLIENT (Python 3.12+) is more secure than PROTOCOL_TLS
+            if hasattr(ssl, 'PROTOCOL_TLS_CLIENT'):
+                ssl_protocol = ssl.PROTOCOL_TLS_CLIENT
+            else:
+                ssl_protocol = ssl.PROTOCOL_TLS
+
             async for websock in ws_connect(
                 self.config.socket_url,
                 extra_headers=self._ADDITIONL_HEADER,
-                ssl=ssl.SSLContext(ssl.PROTOCOL_SSLv23),
+                ssl=ssl.SSLContext(ssl_protocol),
             ):
                 try:
                     res = await self._subscription_drive(

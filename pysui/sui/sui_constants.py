@@ -14,7 +14,7 @@
 
 """Sui Constants."""
 
-SUI_COIN_DENOMINATOR: int = 1000000000
+SUI_COIN_DENOMINATOR: int = 1_000_000_000
 
 # Runtime environment keys
 PYSUI_EXEC_ENV: str = "SUI_EXEC"
@@ -53,7 +53,7 @@ DEVNET_SUI_URL: str = "https://fullnode.devnet.sui.io:443"
 """Devnet Sui client url."""
 # DEVNET_FAUCET_URL: str = "https://faucet.devnet.sui.io/gas"
 # """Devnet client faucet url."""
-DEVNET_FAUCET_URLV1: str = "https://faucet.devnet.sui.io/v1/gas"
+DEVNET_FAUCET_URLV1: str = "https://faucet.devnet.sui.io/v2/gas"
 DEVNET_FAUCET_STATUS_URLV1: str = "https://faucet.devnet.sui.io/v1/status/"
 """Devnet client faucet url V1."""
 DEVNET_SOCKET_URL: str = "wss://fullnode.devnet.sui.io:443"
@@ -71,7 +71,7 @@ LOCALNET_SOCKET_URL: str = "ws://127.0.0.1:9000"
 TESTNET_SUI_URL: str = "https://fullnode.testnet.sui.io:443"
 """Testnet Sui client url."""
 TESTNET_FAUCET_URLV1: str = (
-    "https://faucet.testnet.sui.io/v1/gas"  # "http://faucet.testnet.sui.io/gas"
+    "https://faucet.testnet.sui.io/v2/gas"  # "http://faucet.testnet.sui.io/gas"
 )
 TESTNET_FAUCET_STATUS_URLV1: str = "https://faucet.testnet.sui.io/v1/status/"
 TESTNET_SOCKET_URL: str = "wss://fullnode.testnet.sui.io:443"
@@ -84,10 +84,10 @@ MAINNET_FAUCET_URL: str = ""
 MAINNET_SOCKET_URL: str = "wss://fullnode.mainnet.sui.io:443"
 """Testnet socket url."""
 
-EMPEHMERAL_PATH: str = "ephemeral"
+EPHEMERAL_PATH: str = "ephemeral"
 """A user memory only configuration path"""
 
-EMPEHMERAL_USER: str = "user"
+EPHEMERAL_USER: str = "user"
 """A user memory only configuration"""
 
 # Alias length

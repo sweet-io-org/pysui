@@ -77,6 +77,19 @@ class ConsensusCommitPrologueV2(SuiTxReturnType, DataClassJsonMixin):
 
 
 @dataclass
+class ConsensusCommitPrologueV3(SuiTxReturnType, DataClassJsonMixin):
+    """A system transaction marking the start of a series of transactions scheduled as part of a checkpoint."""
+
+    kind: str
+    commit_timestamp_ms: str
+    consensus_commit_digest: str
+    epoch: str
+    prologue_round: str = field(metadata=config(field_name="round"))
+    sub_dag_index: Optional[str]
+    consensus_determined_version_assignments: Optional[dict[str, list]]
+
+
+@dataclass
 class ProgrammableTransaction(SuiTxReturnType, DataClassJsonMixin):
     """A series of commands where the results of one command can be used in future commands."""
 
@@ -149,6 +162,10 @@ class TransactionData(SuiTxReturnType, DataClassJsonMixin):
                     self.transaction = ProgrammableTransaction.from_dict(
                         self.transaction
                     )
+                case "ConsensusCommitPrologueV3":
+                    self.transaction = ConsensusCommitPrologueV3.from_dict(
+                        self.transaction
+                    )
                 case "ConsensusCommitPrologueV2":
                     self.transaction = ConsensusCommitPrologueV2.from_dict(
                         self.transaction
@@ -219,7 +236,7 @@ class Event(SuiTxReturnType, DataClassJsonMixin):
 
     bcs: str
     package_id: str = field(metadata=config(letter_case=LetterCase.CAMEL))
-    parsed_json: str = field(metadata=config(letter_case=LetterCase.CAMEL))
+    parsed_json: dict = field(metadata=config(letter_case=LetterCase.CAMEL))
     sender: str
     transaction_module: str = field(metadata=config(letter_case=LetterCase.CAMEL))
     event_type: str = field(metadata=config(field_name="type"))
@@ -529,6 +546,7 @@ class SubscribedEventParms(SuiTxReturnType, DataClassJsonMixin):
 
 
 @dataclass
+@deprecated(version="0.65.0", reason="Sui dropping JSON RPC subscriptions.")
 class SubscribedEvent(SuiTxReturnType, DataClassJsonMixin):
     """From suix_subscribeEvents."""
 
@@ -554,6 +572,7 @@ class SubscribedTransactionParms(SuiTxReturnType, DataClassJsonMixin):
     version="0.20.0",
     reason="Sui RPC API 1.0.0 reintroduced subscribe to transactions.",
 )
+@deprecated(version="0.65.0", reason="Sui dropping JSON RPC subscriptions.")
 class SubscribedTransaction(SuiTxReturnType, DataClassJsonMixin):
     """From suix_subscribeTransactions."""
 

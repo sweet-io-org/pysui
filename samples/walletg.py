@@ -17,35 +17,28 @@ sys.path.insert(0, str(PROJECT_DIR))
 sys.path.insert(0, str(PARENT))
 sys.path.insert(0, str(os.path.join(PARENT, "pysui")))
 
-from pysui import SuiConfig
-from pysui.sui.sui_pgql.pgql_clients import SuiGQLClient
+from pysui import PysuiConfiguration, SyncGqlClient
+
+# from pysui.sui.sui_pgql.pgql_clients import SuiGQLClient
 from pysui.sui.sui_constants import PYSUI_CLIENT_CONFIG_ENV
 
-from samples.cmd_argsg import build_parser
+from samples.cmd_argsg import build_parser, pre_config_pull
 from samples.cmdsg import SUI_CMD_DISPATCH
 
 
 def main():
     """Entry point for demonstration."""
-    arg_line = sys.argv[1:].copy()
-    cfg_local: bool = False
-    # Handle a different client.yaml than default
-    if arg_line and arg_line[0] == "--local":
-        cfg_local = True
-        arg_line = arg_line[1:]
-    parsed = build_parser(arg_line)
+    cfg, arg_line = pre_config_pull(sys.argv[1:].copy())
+    parsed = build_parser(arg_line, cfg)
     cmd_call = SUI_CMD_DISPATCH.get(parsed.subcommand, None)
+    cfg.make_active(
+        group_name=parsed.group_name, profile_name=parsed.profile_name, persist=False
+    )
     if cmd_call:
         var_args = vars(parsed)
         var_args.pop("subcommand")
         parsed = argparse.Namespace(**var_args)
-        if cfg_local:
-            raise ValueError("Local not supported for GraphQL commands")
-        else:
-            cfg = SuiConfig.default_config()
-            print(f"Using configuration from {os.environ[PYSUI_CLIENT_CONFIG_ENV]}")
-
-        cmd_call(SuiGQLClient(config=cfg), parsed)
+        cmd_call(SyncGqlClient(pysui_config=cfg), parsed)
     else:
         print(f"Unable to resolve function for {parsed.subcommand}")
 

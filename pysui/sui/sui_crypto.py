@@ -19,6 +19,7 @@ import base64
 import binascii
 import hashlib
 import json
+from enum import IntEnum
 from typing import Optional, Union
 from deprecated.sphinx import versionadded, versionchanged, deprecated
 import pysui_fastcrypto as pfc
@@ -39,7 +40,7 @@ from pysui.sui.sui_constants import (
 )
 
 from pysui.sui.sui_types import SuiSignature, SuiAddress
-from pysui.sui.sui_types.bcs import (
+from pysui.sui.sui_bcs.bcs import (
     MsBitmap,
     MsCompressedSig,
     MsEd25519PublicKey,
@@ -51,13 +52,70 @@ from pysui.sui.sui_types.bcs import (
 from pysui.sui.sui_types.scalars import SuiTxBytes
 
 
+class IntentScope(IntEnum):
+    TransactionData = 0  # Used for a user signature on a transaction data.
+    TransactionEffects = 1  # Used for an authority signature on transaction effects.
+    CheckpointSummary = 2  # Used for an authority signature on a checkpoint summary.
+    PersonalMessage = 3  # Used for a user signature on a personal message.
+    SenderSignedTransaction = (
+        4  # Used for an authority signature on a user signed transaction.
+    )
+    ProofOfPossession = 5  # Used as a signature representing an authority's proof of possession of its authority protocol key.
+    HeaderDigest = 6  # Used for narwhal authority signature on header digest.
+    BridgeEventUnused = (
+        7  # for bridge purposes but it's currently not included in messages.
+    )
+    ConsensusBlock = 8  # Used for consensus authority signature on block's digest.
+    DiscoveryPeers = 9  # Used for reporting peer addresses in discovery.
+
+
 class SuiPublicKey(PublicKey):
     """SuiPublicKey Sui Basic public key."""
+
+    @versionadded(version="0.78.0", reason="Support standalone public key.")
+    @classmethod
+    def from_serialized(cls, indata: str) -> PublicKey:
+        """Convert base64 string to public key."""
+        key_list = list(base64.b64decode(indata))
+        sig = SignatureScheme(key_list[0])
+        return SuiPublicKey(sig, bytes(key_list[1::]))
 
     @property
     def pub_key(self) -> str:
         """Return self as base64 encoded string."""
         return self.to_b64()
+
+    @property
+    def scheme(self) -> SignatureScheme:
+        """Get the keys scheme."""
+        return self._scheme
+
+    @versionadded(
+        version="0.78.0",
+        reason="Support standalone public key serialization to base64.",
+    )
+    def serialize(self) -> str:
+        """Serialize public key to base64 keystring."""
+        return base64.b64encode(self.scheme_and_key()).decode()
+
+    @versionadded(
+        version="0.78.0", reason="Support signature verification using public key."
+    )
+    def verify_personal_message(self, message: str, signature: str) -> bool:
+        """Verify personal message with signature, returning true/false."""
+        from pysui.sui.sui_txn.transaction_builder import PureInput
+
+        # Hash the message with intent
+        intent_msg = bytearray([IntentScope.PersonalMessage, 0, 0])
+        intent_msg.extend(PureInput.pure(list(base64.b64decode(message))))
+        hd1 = hashlib.blake2b(intent_msg, digest_size=32).digest()
+        sigbytes = bytes(list(base64.b64decode(signature))[1:65])
+        return pfc.verify_pubk(
+            self.scheme,
+            self.key_bytes,
+            base64.b64encode(hd1).decode(),
+            base64.b64encode(sigbytes).decode(),
+        )
 
 
 @versionchanged(version="0.33.0", reason="Converted to use pysui-fastcrypto")
@@ -78,7 +136,30 @@ class SuiPrivateKey(PrivateKey):
             self.scheme,
             self.key_bytes,
             tx_data,
-            [0, 0, 0],
+            [IntentScope.TransactionData, 0, 0],
+        )
+
+    @versionadded(version="0.71.0", reason="Signing personal messages")
+    def sign_secure_personal_message(self, message: str) -> list:
+        """sign_secure_personal_message for exchange.
+
+        This method length encodes the message and prefixes with PersonalMessage intent.
+
+        :param tx_data: Base64 encoded message
+        :type tx_data: str
+        :return: Signed message as list of u8 bytes
+        :rtype: list
+        """
+        from pysui.sui.sui_txn.transaction_builder import PureInput
+
+        tx_data = base64.b64encode(
+            bytes(PureInput.pure(list(base64.b64decode(message))))
+        ).decode("utf-8")
+        return pfc.sign_digest(
+            self.scheme,
+            self.key_bytes,
+            tx_data,
+            [IntentScope.PersonalMessage, 0, 0],
         )
 
     @versionadded(version="0.33.0", reason="Hide private key")
@@ -119,14 +200,34 @@ class SuiKeyPair(KeyPair):
         sig = bytearray(self.private_key.sign_secure(tx_data))
         return SuiSignature(base64.b64encode(sig).decode())
 
-    @versionchanged(version="0.34.0", reason="Added to sign arbirary messages")
-    def sign_message(self, message: str) -> str:
-        """Sign arbitrary message, returning it's base64 raw signature."""
-        return pfc.sign_message(self.scheme, self.private_key.key_bytes, message)
+    @versionadded(version="0.71.0", reason="Personal message with intent.")
+    def sign_personal_message(self, message: str) -> str:
+        """."""
+        assert self.private_key, "Can not sign with invalid private key"
+        sig = bytearray(self.private_key.sign_secure_personal_message(message))
+        return base64.b64encode(sig).decode()
+
+    @versionadded(version="0.71.0", reason="Verify personal message with intent.")
+    def verify_personal_message(self, message: str, sig: str) -> bool:
+        """Verify the personal message with IntentMessage."""
+        from pysui.sui.sui_txn.transaction_builder import PureInput
+
+        # Hash the message with intent
+        intent_msg = bytearray([IntentScope.PersonalMessage, 0, 0])
+        intent_msg.extend(PureInput.pure(list(base64.b64decode(message))))
+        hd1 = hashlib.blake2b(intent_msg, digest_size=32).digest()
+        sigbytes = bytes(list(base64.b64decode(sig))[1:65])
+        return pfc.verify(
+            self.scheme,
+            self.private_key.key_bytes,
+            base64.b64encode(hd1).decode(),
+            base64.b64encode(sigbytes).decode(),
+        )
 
     @versionchanged(version="0.34.0", reason="Added to verify signature of message")
+    @deprecated(version="0.71.0", reason="Use verify_personal_message instead")
     def verify_signature(self, message: str, sig: str) -> bool:
-        """Sign arbitrary message, returning it's base64 raw signature."""
+        """Verify arbitrary message (base64) with signature (base64), returning bool."""
         return pfc.verify(self.scheme, self.private_key.key_bytes, message, sig)
 
     def serialize_to_bytes(self) -> bytes:
@@ -145,6 +246,15 @@ class SuiKeyPair(KeyPair):
         :rtype: str
         """
         return base64.b64encode(self.serialize_to_bytes()).decode()
+
+    @versionadded(version="0.76.0", reason="Export bech32 private key.")
+    def to_bech32(self) -> str:
+        """Convert private key to bech32 format
+
+        :return: bech32 formated private key
+        :rtype: str
+        """
+        return pfc.encode_bech32(self.serialize_to_bytes(), SUI_BECH32_HRP)
 
     def to_bytes(self) -> bytes:
         """Convert keypair to bytes."""

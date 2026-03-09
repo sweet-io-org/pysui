@@ -19,6 +19,7 @@ import os
 import base64
 import binascii
 import subprocess
+import json
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,18 +30,16 @@ import base58
 import yaml
 from dataclasses_json import DataClassJsonMixin
 from deprecated.sphinx import versionchanged, versionadded
+from pysui.sui.sui_common.validators import valid_sui_address
 from pysui.sui.sui_constants import (
     DEFAULT_ALIAS_PATH_STRING,
     DEFAULT_DEVNET_PATH_STRING,
-    EMPEHMERAL_PATH,
+    EPHEMERAL_PATH,
     PYSUI_EXEC_ENV,
     SUI_BASE_ACTIVE,
     SUI_BASE_EXEC_PATH,
     DEFAULT_SUI_BINARY_PATH,
 )
-
-import pysui.sui_move.module.deserialize as deser
-from pysui.sui_move.bin_reader.module_reader import ModuleReader
 
 from pysui.sui.sui_types.scalars import (
     SuiString,
@@ -52,12 +51,11 @@ from pysui.sui.sui_types.scalars import (
     SuiTxBytes,
     SuiSignature,
 )
-from pysui.sui.sui_types.address import SuiAddress, valid_sui_address
+from pysui.sui.sui_types.address import SuiAddress
 from pysui.sui.sui_types.collections import BatchParameter, SuiArray, SuiMap
 from pysui.sui.sui_excepts import (
     SuiException,
     SuiMiisingBuildFolder,
-    SuiMiisingModuleByteCode,
     SuiPackageBuildFail,
 )
 from pysui.sui.sui_txresults.single_tx import ObjectRead, ObjectReadData
@@ -68,24 +66,38 @@ from pysui.sui.sui_txresults.single_tx import ObjectRead, ObjectReadData
 _UNPUBLISHED: str = "0000000000000000000000000000000000000000000000000000000000000000"
 
 _SUI_BUILD: list[str] = ["move", "build"]
+_SUI_BUILD2: list[str] = ["move", "build", "--dump", "-e"]
 
 
 @dataclass
-@versionchanged(
-    version="0.17.0",
-    reason="Added the package digest that matches chain digest.",
+@versionadded(
+    version="0.66.0",
+    reason="Uses raw bytes from modules.",
 )
-class CompiledPackage:
+@deprecated(version="0.96.0", reason="Changes to new Sui Move package manager.")
+class CompiledPackageRaw:
     """Ease of compilation information dataclass."""
 
     project_name: str
     project_id: str
     project_source_digest: bytes
     dependencies: list[str]
-    compiled_modules: list[SuiString] = None
+    compiled_modules: list[bytes] = None
     package_digest: bytes = None
 
 
+@dataclass
+@versionadded(version="0.96.0", reason="New package manager approach.")
+class CompiledPackage:
+    """Ease of compilation information dataclass."""
+
+    project_source_digest: bytes = None
+    dependencies: list[str] = None
+    compiled_modules: list[bytes] = None
+    package_digest: list[int] = None
+
+
+@deprecated(version="0.96.0", reason="Changes to new Sui Move package manager.")
 def _compile_project(
     path_to_package: Path, args_list: list[str]
 ) -> Union[Path, SuiException]:
@@ -116,24 +128,48 @@ def _compile_project(
     raise SuiPackageBuildFail(result.stdout)
 
 
-def _module_bytes(module: Path) -> Union[ModuleReader, OSError]:
-    """Fetch the module reader for this module."""
-    return deser.reader_from_file(str(module))
+@deprecated(version="0.96.0", reason="Changes to new Sui Move package manager.")
+def _compile_projectg(
+    sui_bin_str: str, path_to_package: Path, args_list: list[str]
+) -> Union[Path, SuiException]:
+    """_compile_projectg Compiles a sui move project in GraohQL environment."""
+    mbs = _SUI_BUILD.copy()
+    mbs.extend(args_list)
+    mbs.append("-p")
+    mbs.append(path_to_package)
+
+    mbs.insert(0, sui_bin_str)
+    result = subprocess.run(mbs, capture_output=True, text=True)
+    if result.returncode == 0:
+        return path_to_package
+    raise SuiPackageBuildFail(result.stdout)
 
 
-def _modules_bytes(
-    module_path: Path,
-) -> Union[list[ModuleReader], SuiMiisingModuleByteCode, OSError]:
-    """."""
-    mod_list = list(module_path.glob("*.mv"))
-    if not mod_list:
-        raise SuiMiisingModuleByteCode(f"{module_path} is empty")
-    # Open and get the bytes representation of same
-    result_list: list[ModuleReader] = [_module_bytes(module) for module in mod_list]
-    return result_list
+@versionadded(version="0.96.0", reason="New package manager approach.")
+def _compile_projectg2(
+    sui_bin_str: str, path_to_package: Path, args_list: list[str], build_env: str
+) -> Union[CompiledPackage, SuiException]:
+    """_compile_projectg Compiles a sui move project in GraohQL environment."""
+    mbs = _SUI_BUILD2.copy()
+    mbs.append(build_env)
+    mbs.extend(args_list)
+    mbs.append("-p")
+    mbs.append(path_to_package)
+
+    mbs.insert(0, sui_bin_str)
+    result = subprocess.run(mbs, capture_output=True, text=True)
+    if result.returncode == 0:
+        jsonb = json.loads(result.stdout)
+        return CompiledPackage(
+            dependencies=jsonb["dependencies"],
+            compiled_modules=[list(base64.b64decode(x)) for x in jsonb["modules"]],
+            project_source_digest=jsonb["digest"],
+        )
+    raise SuiPackageBuildFail(result.stdout)
 
 
-def _build_dep_info(build_path: str) -> Union[CompiledPackage, Exception]:
+@deprecated(version="0.96.0", reason="Changes to new Sui Move package manager.")
+def _build_dep_info(build_path: str) -> Union[CompiledPackageRaw, Exception]:
     """Fetch details about build."""
     build_info = Path(build_path).joinpath("BuildInfo.yaml")
     if build_info.exists():
@@ -147,7 +183,7 @@ def _build_dep_info(build_path: str) -> Union[CompiledPackage, Exception]:
         for key, value in inner_dep.items():
             if key != pname:
                 dep_ids.append(f"0x{value}")
-        return CompiledPackage(
+        return CompiledPackageRaw(
             pname,
             pindent,
             binascii.unhexlify(build_info_dict["source_digest"]),
@@ -156,45 +192,98 @@ def _build_dep_info(build_path: str) -> Union[CompiledPackage, Exception]:
     raise ValueError("Corrupt publish build information")
 
 
-@versionadded(
-    version="0.20.0",
-    reason="Sui move build introduced hashing the modules first.",
-)
-def _package_digest(package: CompiledPackage, readers: list[ModuleReader]) -> None:
-    """Converts compiled module bytes for publishing and digest calculation."""
-    mod_strs: list = []
-    all_bytes: list = []
-    # Get the bytes for digest and string for publishing
-    for mod_bytes in readers:
-        mr_bytes = mod_bytes.reader.getvalue()
-        hasher = hashlib.blake2b(digest_size=32)
-        hasher.update(mr_bytes)
-        all_bytes.append(hasher.digest())
-        mod_strs.append(SuiString(base64.b64encode(mr_bytes).decode()))
-    for dep_str in package.dependencies:
-        all_bytes.append(binascii.unhexlify(dep_str[2:]))
+@deprecated(version="0.96.0", reason="Changes to new Sui Move package manager.")
+def _package_digestg(package: CompiledPackageRaw, module_path: Path) -> None:
+    """Captures compiled module bytes for publishing and digest calculation."""
 
-    all_bytes.sort()
+    mod_bytes: list[bytes] = []
+    all_digests: list[bytes] = []
+
+    mod_list = list(module_path.glob("*.mv"))
+    if not mod_list:
+        raise ValueError(f"{module_path} is empty")
+    for mmod in mod_list:
+        binfile = mmod.read_bytes()
+        hasher = hashlib.blake2b(digest_size=32)
+        hasher.update(binfile)
+        all_digests.append(hasher.digest())
+        mod_bytes.append(list(binfile))
+    for dep_str in package.dependencies:
+        all_digests.append(binascii.unhexlify(dep_str[2:]))
+    all_digests.sort()
     hasher = hashlib.blake2b(digest_size=32)
-    for bblock in all_bytes:
+    for bblock in all_digests:
         hasher.update(bblock)
     package.package_digest = hasher.digest()
-    package.compiled_modules = mod_strs
+    package.compiled_modules = mod_bytes
+
+
+@versionadded(version="0.96.0", reason="New package manager approach.")
+def _package_digestg2(package: CompiledPackage) -> None:
+    """Captures compiled module bytes for publishing and digest calculation."""
+
+    all_digests: list[bytes] = []
+
+    for mmod in package.compiled_modules:
+        hasher = hashlib.blake2b(digest_size=32)
+        hasher.update(mmod[0])
+        all_digests.append(hasher.digest())
+    for dep_str in package.dependencies:
+        all_digests.append(binascii.unhexlify(dep_str[2:]))
+    all_digests.sort()
+    hasher = hashlib.blake2b(digest_size=32)
+    for bblock in all_digests:
+        hasher.update(bblock)
+    package.package_digest = hasher.digest()
 
 
 @versionchanged(
     version="0.17.0",
     reason="Added the package digest that matches chain digest.",
 )
+@deprecated(version="0.96.0", reason="Changes to new Sui Move package manager.")
 def publish_build(
     path_to_package: Path,
     args_list: list[str],
-) -> Union[CompiledPackage, Exception]:
+) -> Union[CompiledPackageRaw, Exception]:
     """Build and collect module base64 strings and dependencies ObjectIDs."""
-    if os.environ[PYSUI_EXEC_ENV] == EMPEHMERAL_PATH:
+    if os.environ[PYSUI_EXEC_ENV] == EPHEMERAL_PATH:
         raise ValueError(f"Configuration does not support publishing")
     # Compile the package
     path_to_package = _compile_project(path_to_package, args_list)
+    # Find the build folder
+    build_path = path_to_package.joinpath("build")
+    if not build_path.exists():
+        raise SuiMiisingBuildFolder(f"No build folder found in {path_to_package}")
+    # Get the project folder
+    build_subdir = [
+        x for x in os.scandir(build_path) if x.is_dir() and x.name != "locks"
+    ]
+    if len(build_subdir) > 1:
+        raise SuiMiisingBuildFolder(f"No build folder found in {path_to_package}")
+    # Finally, get the module(s) bytecode folder
+    move_modules = Path(build_subdir[0]).joinpath("bytecode_modules")
+    if not move_modules.exists():
+        raise SuiMiisingBuildFolder(
+            f"No bytecode_modules folder found for {path_to_package}/build"
+        )
+
+    # Construct initial package
+    cpackage = _build_dep_info(build_subdir[0].path)
+    # Set module bytes as base64 strings and generate package digest
+    _package_digestg(cpackage, move_modules)
+    return cpackage
+
+
+@deprecated(version="0.96.0", reason="Changes to new Sui Move package manager.")
+def publish_buildg(
+    sui_bin_path_str: str,
+    path_to_package: Path,
+    args_list: list[str],
+) -> Union[CompiledPackageRaw, Exception]:
+    """Build and collect module base64 strings and dependencies ObjectIDs."""
+    # Compile the package
+    path_to_package = _compile_projectg(sui_bin_path_str, path_to_package, args_list)
     # Find the build folder
     build_path = path_to_package.joinpath("build")
     if not build_path.exists():
@@ -215,7 +304,23 @@ def publish_build(
     # Construct initial package
     cpackage = _build_dep_info(build_subdir[0].path)
     # Set module bytes as base64 strings and generate package digest
-    _package_digest(cpackage, _modules_bytes(byte_modules))
+    _package_digestg(cpackage, byte_modules)
+    return cpackage
+
+
+@versionadded(version="0.96.0", reason="New package manager approach.")
+def publish_buildg2(
+    sui_bin_path_str: str, path_to_package: Path, args_list: list[str], build_env: str
+) -> Union[CompiledPackageRaw, Exception]:
+    """Build and collect module base64 strings and dependencies ObjectIDs."""
+    # Compile the package
+    cpackage = _compile_projectg2(
+        sui_bin_path_str, path_to_package, args_list, build_env
+    )
+
+    cpackage.package_digest = bytes(cpackage.project_source_digest)
+
+    # _package_digestg2(cpackage)
     return cpackage
 
 
@@ -261,6 +366,21 @@ def sui_base_get_config() -> tuple[Path, Path, Union[Path, None]]:
             if not sui_exec_path.exists():
                 raise ValueError(f"sui binary not found {sui_exec_path}")
     return local_cfg, sui_exec_path, alias_file
+
+
+# Serialize helper
+def serialize_uint32_as_uleb128(value: int) -> bytes:
+    """."""
+    ret = bytearray()
+    while value >= 0x80:
+        # Write 7 (lowest) bits of data and set the 8th bit to 1.
+        byte = value & 0x7F
+        ret.append(byte | 0x80)
+        value >>= 7
+
+    # Write the remaining bits of data and set the highest bit to 0.
+    ret.append(value)
+    return bytes(ret)
 
 
 # Iteration helpers - lists
@@ -318,6 +438,11 @@ def b64str_to_list(indata: str) -> list[int]:
     """
     b64bytes = base64.b64decode(indata)
     return [int(x) for x in b64bytes]
+
+
+def from_list_to_b58str(indata: list) -> str:
+    """From list to b58 string."""
+    return base58.b58encode(bytearray(indata)).decode("utf-8")
 
 
 def b58str_to_list(indata: str) -> list[int]:
